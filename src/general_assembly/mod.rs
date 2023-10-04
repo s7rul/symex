@@ -1,7 +1,7 @@
 pub mod project;
 pub mod vm;
 
-#[derive(Debug)]
+#[derive(Debug, Clone, Copy)]
 pub enum WordSize {
     Bit64,
     Bit32,
@@ -9,7 +9,7 @@ pub enum WordSize {
     Bit8,
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone, Copy)]
 pub enum DataWord {
     Word64(u64),
     Word32(u32),
@@ -17,7 +17,7 @@ pub enum DataWord {
     Word8(u8),
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone, Copy)]
 pub enum DataHalfWord {
     HalfWord64(u32),
     HalfWord32(u16),
