@@ -22,6 +22,7 @@
 //#![warn(missing_docs)]
 
 pub mod core;
+pub mod general_assembly;
 pub mod llvm;
 pub mod memory;
 pub mod run;
