@@ -47,12 +47,25 @@ fn run() -> Result<()> {
 
     let args = Args::parse_from(args);
 
+    // maybe  hacky look into later
+    match args.elf {
+        Some(_) => {
+            return run_elf(args);
+        }
+        None => ()
+    }
+
     match args.subcommand {
         Some(subcommand) => match subcommand {
             Subcommands::C(clang_args) => run_c(clang_args),
         },
         None => run_rs(args),
     }
+}
+
+fn run_elf(args: Args) -> Result<()> {
+    debug!("Run elf file.");
+    todo!()
 }
 
 fn run_rs(args: Args) -> Result<()> {

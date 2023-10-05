@@ -1,3 +1,5 @@
+use crate::core::executor::VMError;
+
 pub mod project;
 pub mod vm;
 
@@ -29,6 +31,8 @@ pub enum Endianness {
     Little,
     Big,
 }
+
+pub type Result<T> = std::result::Result<T, VMError>;
 
 #[derive(Debug, Clone)]
 pub struct Config {

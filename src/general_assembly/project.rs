@@ -1,25 +1,11 @@
 use std::fmt::Display;
+use std::path::Path;
+use crate::core::executor::VMError;
+use crate::core::memory::MemoryError;
+
+use super::Result;
 
 use super::{DataHalfWord, DataWord, Endianness, WordSize};
-
-#[derive(Debug)]
-pub enum Error {
-    InvalidAddress,
-    UnavailableOperation,
-}
-
-impl Display for Error {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        match self {
-            Error::InvalidAddress => {
-                write!(f, "Invalid Address: Address not in program memory range.")
-            }
-            Error::UnavailableOperation => {
-                write!(f, "Operation not available for endianness or word size.")
-            }
-        }
-    }
-}
 
 #[derive(Debug)]
 pub struct Project {
@@ -31,16 +17,21 @@ pub struct Project {
 }
 
 impl Project {
+    pub fn from_path(path: impl AsRef<Path>) -> Result<Self> {
+        todo!()
+    }
+
+
     /// Get a byte of data from program memory.
-    pub fn get_byte(&self, address: u64) -> Result<u8, Error> {
+    pub fn get_byte(&self, address: u64) -> Result<u8> {
         if address >= self.start_addr && address <= self.end_addr {
             Ok(self.program_memory[(self.start_addr - address) as usize])
         } else {
-            Err(Error::InvalidAddress)
+            Err(VMError::MemoryError(MemoryError::OutOfBounds))
         }
     }
 
-    fn get_word_internal(&self, address: u64, width: WordSize) -> Result<DataWord, Error> {
+    fn get_word_internal(&self, address: u64, width: WordSize) -> Result<DataWord> {
         let mem = self.program_memory.as_ref();
         Ok(match width {
             WordSize::Bit64 => {
@@ -53,7 +44,7 @@ impl Project {
                         Endianness::Big => u64::from_be_bytes(data),
                     })
                 } else {
-                    return Err(Error::InvalidAddress);
+                    return Err(MemoryError::OutOfBounds.into());
                 }
             }
             WordSize::Bit32 => {
@@ -66,7 +57,7 @@ impl Project {
                         Endianness::Big => u32::from_be_bytes(data),
                     })
                 } else {
-                    return Err(Error::InvalidAddress);
+                    return Err(MemoryError::OutOfBounds.into());
                 }
             }
             WordSize::Bit16 => {
@@ -79,7 +70,7 @@ impl Project {
                         Endianness::Big => u16::from_be_bytes(data),
                     })
                 } else {
-                    return Err(Error::InvalidAddress);
+                    return Err(MemoryError::OutOfBounds.into());
                 }
             }
             WordSize::Bit8 => DataWord::Word8(self.get_byte(address)?),
@@ -87,11 +78,11 @@ impl Project {
     }
 
     /// Get a word from data memory
-    pub fn get_word(&self, address: u64) -> Result<DataWord, Error> {
+    pub fn get_word(&self, address: u64) -> Result<DataWord> {
         self.get_word_internal(address, self.word_size)
     }
 
-    pub fn get_half_word(&self, address: u64) -> Result<DataHalfWord, Error> {
+    pub fn get_half_word(&self, address: u64) -> Result<DataHalfWord> {
         Ok(match self.word_size {
             WordSize::Bit64 => match self.get_word_internal(address, WordSize::Bit32)? {
                 DataWord::Word32(d) => DataHalfWord::HalfWord64(d),
@@ -105,7 +96,7 @@ impl Project {
                 DataWord::Word8(d) => DataHalfWord::HalfWord16(d),
                 _ => panic!("Should never reach this part."),
             },
-            WordSize::Bit8 => return Err(Error::UnavailableOperation),
+            WordSize::Bit8 => return Err(VMError::Other("Word size u8 have no halfword.".to_owned())),
         })
     }
 }
