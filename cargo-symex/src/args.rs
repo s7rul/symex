@@ -5,9 +5,19 @@ use std::path::PathBuf;
 #[clap(author, version, about, long_about = None)]
 pub struct Args {
     /// Reads from elf file
-    #[clap(long, conflicts_with = "bin", conflicts_with = "example", conflicts_with = "lib", conflicts_with = "release", conflicts_with = "features", conflicts_with = "all_features", conflicts_with = "subcommand", conflicts_with = "embed_bitcode")]
+    #[clap(
+        long,
+        conflicts_with = "bin",
+        conflicts_with = "example",
+        conflicts_with = "lib",
+        conflicts_with = "release",
+        conflicts_with = "features",
+        conflicts_with = "all_features",
+        conflicts_with = "subcommand",
+        conflicts_with = "embed_bitcode"
+    )]
     pub elf: Option<String>,
-    
+
     /// Build package library.
     #[clap(long, conflicts_with = "bin", conflicts_with = "example")]
     pub lib: Option<bool>,

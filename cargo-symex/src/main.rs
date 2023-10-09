@@ -52,7 +52,7 @@ fn run() -> Result<()> {
         Some(_) => {
             return run_elf(args);
         }
-        None => ()
+        None => (),
     }
 
     match args.subcommand {
@@ -65,7 +65,25 @@ fn run() -> Result<()> {
 
 fn run_elf(args: Args) -> Result<()> {
     debug!("Run elf file.");
-    todo!()
+    let path = match args.elf {
+        Some(path) => path,
+        None => todo!(),
+    };
+    let function_name = match args.function {
+        Some(function) => function,
+        None => "main".to_owned(),
+    };
+    debug!("Starting analasys on target: {path}, function: {function_name}");
+
+    let cfg = RunConfig {
+        solve_inputs: true,
+        solve_symbolics: true,
+        solve_output: true,
+        solve_for: symex::run::SolveFor::All,
+    };
+
+    symex::run::run_elf(&path, &function_name, &cfg)?;
+    Ok(())
 }
 
 fn run_rs(args: Args) -> Result<()> {

@@ -12,9 +12,9 @@ use rustc_demangle::demangle;
 
 use crate::{
     core::executor::VMError,
-    llvm::{executor::ReturnValue, project::Project, state::LLVMState, vm::VM},
+    llvm,
     smt::DContext,
-    util::{ErrorReason, ExpressionType, LineTrace, PathResult, PathStatus, Variable},
+    util::{ErrorReason, ExpressionType, LineTrace, PathResult, PathStatus, Variable}, general_assembly::{project, self},
 };
 
 #[derive(Debug)]
@@ -60,6 +60,18 @@ pub enum SolveFor {
     Success,
 }
 
+pub fn run_elf(
+    path: impl AsRef<Path>,
+    function: impl AsRef<str>,
+    cfg: &RunConfig,
+) -> Result<Vec<PathResult>, VMError> {
+    let context = Box::new(DContext::new());
+    let context = Box::leak(context);
+
+    let project = Box::new(general_assembly::project::Project::from_path(path)?);
+    todo!()
+}
+
 pub fn run(
     path: impl AsRef<Path>,
     function: impl AsRef<str>,
@@ -71,11 +83,11 @@ pub fn run(
     let context = Box::new(DContext::new());
     let context = Box::leak(context);
 
-    let project = Box::new(Project::from_path(path).unwrap());
+    let project = Box::new(llvm::project::Project::from_path(path).unwrap());
     let project = Box::leak(project);
 
     info!("create VM");
-    let mut vm = VM::new(project, context, function.as_ref())?;
+    let mut vm = llvm::vm::VM::new(project, context, function.as_ref())?;
     info!("run paths");
     let result = run_paths(&mut vm, cfg)?;
 
@@ -94,7 +106,7 @@ struct RunnerResult {
     results: Vec<PathResult>,
 }
 
-fn run_paths(vm: &mut VM, cfg: &RunConfig) -> Result<RunnerResult, VMError> {
+fn run_paths(vm: &mut llvm::vm::VM, cfg: &RunConfig) -> Result<RunnerResult, VMError> {
     // Go through all paths.
 
     let mut results = Vec::new();
@@ -121,7 +133,7 @@ fn run_paths(vm: &mut VM, cfg: &RunConfig) -> Result<RunnerResult, VMError> {
             let result = match path_result {
                 Ok(value) => {
                     let value = match value {
-                        ReturnValue::Value(expr) => Some(Variable {
+                        llvm::executor::ReturnValue::Value(expr) => Some(Variable {
                             name: Some("output".to_string()),
                             value: if cfg.solve_output {
                                 state.constraints.get_value(&expr)?
@@ -130,7 +142,7 @@ fn run_paths(vm: &mut VM, cfg: &RunConfig) -> Result<RunnerResult, VMError> {
                             },
                             ty: ExpressionType::Unknown,
                         }),
-                        ReturnValue::Void => None,
+                        llvm::executor::ReturnValue::Void => None,
                     };
                     PathStatus::Ok(value)
                 }
@@ -156,7 +168,7 @@ fn run_paths(vm: &mut VM, cfg: &RunConfig) -> Result<RunnerResult, VMError> {
     })
 }
 
-fn create_error_reason(state: &mut LLVMState, error: VMError) -> ErrorReason {
+fn create_error_reason(state: &mut llvm::state::LLVMState, error: VMError) -> ErrorReason {
     let error_message = format!("{}", error);
     // let error_location = state.stack_frames.last()
     //     .current_loc
@@ -190,7 +202,7 @@ fn create_error_reason(state: &mut LLVMState, error: VMError) -> ErrorReason {
     }
 }
 
-fn get_values<'a, I>(vars: I, state: &LLVMState) -> Result<Vec<Variable>, VMError>
+fn get_values<'a, I>(vars: I, state: &llvm::state::LLVMState) -> Result<Vec<Variable>, VMError>
 where
     I: Iterator<Item = &'a Variable>,
 {

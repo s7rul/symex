@@ -1,9 +1,12 @@
 use llvm_ir::types::{FPType, NamedStructDef, Type, TypeRef};
 
 use crate::{
+    core::{
+        memory::to_bytes,
+        smt::{Expression, SolverContext},
+    },
     llvm::{project::Project, LLVMExecutorError, Result},
-    core::{memory::to_bytes, smt::{ Expression, SolverContext}},
-    smt::{DContext, DExpr}
+    smt::{DContext, DExpr},
 };
 
 /// Calculates the size of the type in bits.

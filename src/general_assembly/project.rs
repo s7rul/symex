@@ -1,7 +1,7 @@
-use std::fmt::Display;
-use std::path::Path;
 use crate::core::executor::VMError;
 use crate::core::memory::MemoryError;
+use std::fmt::Display;
+use std::path::Path;
 
 use super::Result;
 
@@ -20,7 +20,6 @@ impl Project {
     pub fn from_path(path: impl AsRef<Path>) -> Result<Self> {
         todo!()
     }
-
 
     /// Get a byte of data from program memory.
     pub fn get_byte(&self, address: u64) -> Result<u8> {
@@ -96,7 +95,9 @@ impl Project {
                 DataWord::Word8(d) => DataHalfWord::HalfWord16(d),
                 _ => panic!("Should never reach this part."),
             },
-            WordSize::Bit8 => return Err(VMError::Other("Word size u8 have no halfword.".to_owned())),
+            WordSize::Bit8 => {
+                return Err(VMError::Other("Word size u8 have no halfword.".to_owned()))
+            }
         })
     }
 }
