@@ -281,7 +281,7 @@ define dso_local i32 @test_gep1() #0 {
     %1 = getelementptr inbounds %struct.ST, ptr %ptr, i64 0, i32 0
     %2 = load i32, i32* %1
     ret i32 %2 ; expect 1 ([0])
-}q
+}
 
 define dso_local i64 @test_gep2() #0 {
     %ptr = alloca %struct.ST, align 8

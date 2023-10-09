@@ -57,6 +57,19 @@ pub enum SolveFor {
     Success,
 }
 
+pub fn run_elf(
+    path: impl AsRef<Path>,
+    function: impl AsRef<str>,
+    cfg: &RunConfig,
+) -> Result<Vec<VisualPathResult>, LLVMExecutorError> {
+    let context = Box::new(DContext::new());
+    let context = Box::leak(context);
+
+    let project = Box::new()
+    todo!()
+}
+
+
 pub fn run(
     path: impl AsRef<Path>,
     function: impl AsRef<str>,
