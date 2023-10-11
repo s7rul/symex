@@ -1,7 +1,15 @@
-use crate::core::executor::VMError;
+use self::project::ProjectError;
 
 pub mod project;
 pub mod vm;
+
+pub type Result<T> = std::result::Result<T, GAError>;
+
+#[derive(Clone, Debug, Eq, PartialEq, thiserror::Error)]
+pub enum GAError {
+    #[error("Project error: {0}")]
+    ProjectError(#[from] ProjectError),
+}
 
 #[derive(Debug, Clone, Copy)]
 pub enum WordSize {
@@ -31,8 +39,6 @@ pub enum Endianness {
     Little,
     Big,
 }
-
-pub type Result<T> = std::result::Result<T, VMError>;
 
 #[derive(Debug, Clone)]
 pub struct Config {

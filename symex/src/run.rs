@@ -10,9 +10,10 @@ use rustc_demangle::demangle;
 use tracing::{debug, info};
 
 use crate::{
+    general_assembly::{self, GAError},
     smt::DContext,
     util::{ErrorReason, ExpressionType, LineTrace, PathStatus, Variable, VisualPathResult},
-    vm::{AnalysisError, LLVMExecutorError, LLVMState, PathResult, Project, VM},
+    vm,
 };
 
 #[derive(Debug)]
@@ -35,11 +36,11 @@ impl RunConfig {
     ///
     /// Returns true of all paths should be solved, or if the result variant matches the given
     /// `SolveFor`.
-    fn should_solve(&self, result: &PathResult) -> bool {
+    fn should_solve(&self, result: &vm::PathResult) -> bool {
         match self.solve_for {
             SolveFor::All => true,
-            SolveFor::Error => matches!(result, PathResult::Success(_)),
-            SolveFor::Success => matches!(result, PathResult::Failure(_)),
+            SolveFor::Error => matches!(result, vm::PathResult::Success(_)),
+            SolveFor::Success => matches!(result, vm::PathResult::Failure(_)),
         }
     }
 }
@@ -58,34 +59,34 @@ pub enum SolveFor {
 }
 
 pub fn run_elf(
-    path: impl AsRef<Path>,
+    path: &str,
     function: impl AsRef<str>,
     cfg: &RunConfig,
-) -> Result<Vec<VisualPathResult>, LLVMExecutorError> {
+) -> Result<Vec<VisualPathResult>, GAError> {
     let context = Box::new(DContext::new());
     let context = Box::leak(context);
 
-    let project = Box::new()
+    let project = Box::new(general_assembly::project::Project::from_path(path)?);
+    let project = Box::leak(project);
     todo!()
 }
-
 
 pub fn run(
     path: impl AsRef<Path>,
     function: impl AsRef<str>,
     cfg: &RunConfig,
-) -> Result<Vec<VisualPathResult>, LLVMExecutorError> {
+) -> Result<Vec<VisualPathResult>, vm::LLVMExecutorError> {
     // As a temporary measure both the smt context and project get leaked, this is only so I don't
     // have to care about those lifetimes, since they always live for the entire duration of the
     // run anyway.
     let context = Box::new(DContext::new());
     let context = Box::leak(context);
 
-    let project = Box::new(Project::from_path(path).unwrap());
+    let project = Box::new(vm::Project::from_path(path).unwrap());
     let project = Box::leak(project);
 
     info!("create VM");
-    let mut vm = VM::new(project, context, function.as_ref())?;
+    let mut vm = vm::VM::new(project, context, function.as_ref())?;
     info!("run paths");
     let result = run_paths(&mut vm, cfg)?;
 
@@ -104,7 +105,7 @@ struct RunnerResult {
     results: Vec<VisualPathResult>,
 }
 
-fn run_paths(vm: &mut VM, cfg: &RunConfig) -> Result<RunnerResult, LLVMExecutorError> {
+fn run_paths(vm: &mut vm::VM, cfg: &RunConfig) -> Result<RunnerResult, vm::LLVMExecutorError> {
     // Go through all paths.
 
     let mut results = Vec::new();
@@ -112,11 +113,11 @@ fn run_paths(vm: &mut VM, cfg: &RunConfig) -> Result<RunnerResult, LLVMExecutorE
 
     let start = Instant::now();
     while let Some((path_result, mut state)) = vm.run()? {
-        if matches!(path_result, PathResult::Suppress) {
+        if matches!(path_result, vm::PathResult::Suppress) {
             debug!("Suppressing path");
             continue;
         }
-        if matches!(path_result, PathResult::AssumptionUnsat) {
+        if matches!(path_result, vm::PathResult::AssumptionUnsat) {
             println!("Encountered an unsatisfiable assumption, ignoring this path");
             continue;
         }
@@ -138,7 +139,7 @@ fn run_paths(vm: &mut VM, cfg: &RunConfig) -> Result<RunnerResult, LLVMExecutorE
             };
 
             let result = match path_result {
-                PathResult::Success(value) => {
+                vm::PathResult::Success(value) => {
                     let value = if let Some(value) = value {
                         Some(Variable {
                             name: Some("output".to_string()),
@@ -154,11 +155,11 @@ fn run_paths(vm: &mut VM, cfg: &RunConfig) -> Result<RunnerResult, LLVMExecutorE
                     };
                     PathStatus::Ok(value)
                 }
-                PathResult::Failure(reason) => {
+                vm::PathResult::Failure(reason) => {
                     PathStatus::Failed(create_error_reason(&mut state, reason.into()))
                 }
-                PathResult::Suppress => unreachable!("Suppress is handled above"),
-                PathResult::AssumptionUnsat => unreachable!("AssumptionUnsat is handled above"),
+                vm::PathResult::Suppress => unreachable!("Suppress is handled above"),
+                vm::PathResult::AssumptionUnsat => unreachable!("AssumptionUnsat is handled above"),
             };
 
             let path_result = VisualPathResult {
@@ -180,7 +181,7 @@ fn run_paths(vm: &mut VM, cfg: &RunConfig) -> Result<RunnerResult, LLVMExecutorE
     })
 }
 
-fn create_error_reason(state: &mut LLVMState, error: AnalysisError) -> ErrorReason {
+fn create_error_reason(state: &mut vm::LLVMState, error: vm::AnalysisError) -> ErrorReason {
     let error_message = format!("{:?}", error);
 
     let error_location = state
@@ -221,7 +222,7 @@ fn create_error_reason(state: &mut LLVMState, error: AnalysisError) -> ErrorReas
     }
 }
 
-fn get_values<'a, I>(vars: I, state: &LLVMState) -> Result<Vec<Variable>, LLVMExecutorError>
+fn get_values<'a, I>(vars: I, state: &vm::LLVMState) -> Result<Vec<Variable>, vm::LLVMExecutorError>
 where
     I: Iterator<Item = &'a Variable>,
 {
