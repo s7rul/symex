@@ -60,7 +60,7 @@ pub enum SolveFor {
 
 pub fn run_elf(
     path: &str,
-    function: impl AsRef<str>,
+    function: &str,
     cfg: &RunConfig,
 ) -> Result<Vec<VisualPathResult>, GAError> {
     let context = Box::new(DContext::new());
@@ -68,6 +68,13 @@ pub fn run_elf(
 
     let project = Box::new(general_assembly::project::Project::from_path(path)?);
     let project = Box::leak(project);
+    debug!("Created project: {:?}", project);
+
+    info!("create VM");
+    let mut vm = general_assembly::vm::VM::new(project, context, function)?;
+
+    let state = vm.run().unwrap().unwrap();
+
     todo!()
 }
 

@@ -1,6 +1,9 @@
 use self::project::ProjectError;
 
+pub mod instruction;
+pub mod path_selection;
 pub mod project;
+pub mod state;
 pub mod vm;
 
 pub type Result<T> = std::result::Result<T, GAError>;
@@ -9,6 +12,9 @@ pub type Result<T> = std::result::Result<T, GAError>;
 pub enum GAError {
     #[error("Project error: {0}")]
     ProjectError(#[from] ProjectError),
+
+    #[error("Entry function {0} not found.")]
+    EntryFunctionNotFound(String),
 }
 
 #[derive(Debug, Clone, Copy)]
@@ -25,6 +31,14 @@ pub enum DataWord {
     Word32(u32),
     Word16(u16),
     Word8(u8),
+}
+
+#[derive(Debug, Clone, Copy)]
+pub enum RawDataWord {
+    Word64([u8; 8]),
+    Word32([u8; 4]),
+    Word16([u8; 2]),
+    Word8([u8; 1]),
 }
 
 #[derive(Debug, Clone, Copy)]

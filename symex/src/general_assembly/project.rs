@@ -1,11 +1,12 @@
-use std::{collections::HashMap, fs};
+use std::{collections::HashMap, fmt::Debug, fs};
 
+use armv6_m_instruction_parser::parse;
 use object::{Object, ObjectSection, ObjectSymbol};
 use tracing::debug;
 
 use crate::memory::MemoryError;
 
-use super::{DataHalfWord, DataWord, Endianness, WordSize};
+use super::{DataHalfWord, DataWord, Endianness, RawDataWord, WordSize, instruction::Instruction};
 
 type Result<T> = std::result::Result<T, ProjectError>;
 
@@ -22,7 +23,7 @@ pub enum ProjectError {
 }
 
 /// Holds all data read from the ELF file.
-#[derive(Debug)]
+// Add all read only memmory here later to handle global constants.
 pub struct Project {
     program_memory: Vec<u8>,
     start_addr: u64,
@@ -36,12 +37,13 @@ pub struct Project {
 impl Project {
     pub fn from_path(path: &str) -> Result<Self> {
         debug!("Parsing elf file: {}", path);
-        let mut file = fs::read(path).expect("Unable to open file.");
+        let file = fs::read(path).expect("Unable to open file.");
         let obj_file = match object::File::parse(&*file) {
             Ok(x) => x,
             Err(e) => {
                 debug!("Error: {}", e);
-                return Err(ProjectError::UnableToParseElf(path.to_owned()))},
+                return Err(ProjectError::UnableToParseElf(path.to_owned()));
+            }
         };
 
         let text_section = match obj_file.section_by_name(".text") {
@@ -81,10 +83,13 @@ impl Project {
 
         let mut symtab = HashMap::new();
         for symbol in obj_file.symbols() {
-            symtab.insert(match symbol.name() {
-                Ok(name) => name.to_owned(),
-                Err(_) => continue, // ignore entry if name can not be read
-            }, symbol.address());
+            symtab.insert(
+                match symbol.name() {
+                    Ok(name) => name.to_owned(),
+                    Err(_) => continue, // ignore entry if name can not be read
+                },
+                symbol.address(),
+            );
         }
 
         Ok(Project {
@@ -96,6 +101,40 @@ impl Project {
             program_memory: text_data,
             symtab,
         })
+    }
+
+    pub fn get_ptr_size(&self) -> u32 {
+        // This is an oversimplification and not true for some architectures
+        // But will do and should map to the addresses in the elf
+        match self.word_size {
+            WordSize::Bit64 => 64,
+            WordSize::Bit32 => 32,
+            WordSize::Bit16 => 16,
+            WordSize::Bit8 => 8,
+        }
+    }
+
+    /// Get the address of a symbol from the ELF symbol table
+    pub fn get_symbol_address(&self, symbol: &str) -> Option<u64> {
+        self.symtab.get(symbol).copied()
+    }
+
+    /// Get the instruction att a address
+    pub fn get_instruction(&self, address: u64) -> Result<Instruction> {
+        let data = match self.get_raw_word(address)? {
+            RawDataWord::Word64(d) => &d,
+            RawDataWord::Word32(_) => todo!(),
+            RawDataWord::Word16(_) => todo!(),
+            RawDataWord::Word8(_) => todo!(),
+        };
+        match self.architecture {
+            object::Architecture::Arm => {
+                // probobly right add more cheks later or custom enum etc.
+                let arm_instruction = parse(data).unwrap();
+                todo!()
+            },
+            _ => todo!(),
+        }
     }
 
     /// Get a byte of data from program memory.
@@ -174,5 +213,51 @@ impl Project {
             },
             WordSize::Bit8 => return Err(ProjectError::UnabvalableOperation),
         })
+    }
+
+    pub fn get_raw_word(&self, address: u64) -> Result<RawDataWord> {
+        let mem: &[u8] = self.program_memory.as_ref();
+        Ok(match self.word_size {
+            WordSize::Bit64 => {
+                let mut data = [0; 8];
+                if address >= self.start_addr && (address + 7) <= self.end_addr {
+                    data.copy_from_slice(&mem[address as usize..(address + 8) as usize]);
+                    RawDataWord::Word64(data)
+                } else {
+                    return Err(MemoryError::OutOfBounds.into());
+                }
+            }
+            WordSize::Bit32 => {
+                let mut data = [0; 4];
+                if address >= self.start_addr && (address + 3) <= self.end_addr {
+                    data.copy_from_slice(&mem[address as usize..(address + 4) as usize]);
+                    RawDataWord::Word32(data)
+                } else {
+                    return Err(MemoryError::OutOfBounds.into());
+                }
+            }
+            WordSize::Bit16 => {
+                let mut data = [0; 2];
+                if address >= self.start_addr && (address + 1) <= self.end_addr {
+                    data.copy_from_slice(&mem[address as usize..(address + 2) as usize]);
+                    RawDataWord::Word16(data)
+                } else {
+                    return Err(MemoryError::OutOfBounds.into());
+                }
+            }
+            WordSize::Bit8 => RawDataWord::Word8([self.get_byte(address)?]),
+        })
+    }
+}
+
+impl Debug for Project {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("Project")
+            .field("start_addr", &self.start_addr)
+            .field("end_addr", &self.end_addr)
+            .field("word_size", &self.word_size)
+            .field("endianness", &self.endianness)
+            .field("architecture", &self.architecture)
+            .finish()
     }
 }
