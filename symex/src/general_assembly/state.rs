@@ -5,7 +5,7 @@ use std::collections::HashMap;
 use tracing::debug;
 
 use crate::{
-    general_assembly::{Result, GAError},
+    general_assembly::{GAError, Result},
     memory::ObjectMemory,
     smt::{DContext, DExpr, DSolver},
     util::Variable,
@@ -32,7 +32,7 @@ impl GAState {
         constraints: DSolver,
         function: &str,
     ) -> Result<Self> {
-        let pc_reg = match project.get_symbol_address(function){
+        let pc_reg = match project.get_symbol_address(function) {
             Some(a) => a,
             None => return Err(GAError::EntryFunctionNotFound(function.to_owned())),
         };

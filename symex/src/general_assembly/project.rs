@@ -6,7 +6,7 @@ use tracing::debug;
 
 use crate::memory::MemoryError;
 
-use super::{DataHalfWord, DataWord, Endianness, RawDataWord, WordSize, instruction::Instruction};
+use super::{instruction::Instruction, DataHalfWord, DataWord, Endianness, RawDataWord, WordSize};
 
 type Result<T> = std::result::Result<T, ProjectError>;
 
@@ -121,18 +121,24 @@ impl Project {
 
     /// Get the instruction att a address
     pub fn get_instruction(&self, address: u64) -> Result<Instruction> {
-        let data = match self.get_raw_word(address)? {
-            RawDataWord::Word64(d) => &d,
-            RawDataWord::Word32(_) => todo!(),
-            RawDataWord::Word16(_) => todo!(),
+        let address = address & !(0b1); // Not applicable for all architectures TODO: Fix this.
+        debug!("Reading instruction from address: {:#010X}", address);
+        match self.get_raw_word(address)? {
+            RawDataWord::Word64(d) => self.instruction_from_array_ptr(&d),
+            RawDataWord::Word32(d) => self.instruction_from_array_ptr(&d),
+            RawDataWord::Word16(d) => self.instruction_from_array_ptr(&d),
             RawDataWord::Word8(_) => todo!(),
-        };
+        }
+    }
+
+    fn instruction_from_array_ptr(&self, data: &[u8]) -> Result<Instruction> {
         match self.architecture {
             object::Architecture::Arm => {
                 // probobly right add more cheks later or custom enum etc.
                 let arm_instruction = parse(data).unwrap();
+                debug!("instruction read: {:?}", arm_instruction);
                 todo!()
-            },
+            }
             _ => todo!(),
         }
     }
@@ -152,6 +158,7 @@ impl Project {
             WordSize::Bit64 => {
                 let mut data = [0; 8];
                 if address >= self.start_addr && (address + 7) <= self.end_addr {
+                    let address = address - self.start_addr;
                     data.copy_from_slice(&mem[address as usize..(address + 8) as usize]);
 
                     DataWord::Word64(match self.endianness {
@@ -165,6 +172,7 @@ impl Project {
             WordSize::Bit32 => {
                 let mut data = [0; 4];
                 if address >= self.start_addr && (address + 3) <= self.end_addr {
+                    let address = address - self.start_addr;
                     data.copy_from_slice(&mem[address as usize..(address + 4) as usize]);
 
                     DataWord::Word32(match self.endianness {
@@ -178,6 +186,7 @@ impl Project {
             WordSize::Bit16 => {
                 let mut data = [0; 2];
                 if address >= self.start_addr && (address + 1) <= self.end_addr {
+                    let address = address - self.start_addr;
                     data.copy_from_slice(&mem[address as usize..(address + 2) as usize]);
 
                     DataWord::Word16(match self.endianness {
@@ -221,6 +230,7 @@ impl Project {
             WordSize::Bit64 => {
                 let mut data = [0; 8];
                 if address >= self.start_addr && (address + 7) <= self.end_addr {
+                    let address = address - self.start_addr;
                     data.copy_from_slice(&mem[address as usize..(address + 8) as usize]);
                     RawDataWord::Word64(data)
                 } else {
@@ -230,6 +240,7 @@ impl Project {
             WordSize::Bit32 => {
                 let mut data = [0; 4];
                 if address >= self.start_addr && (address + 3) <= self.end_addr {
+                    let address = address - self.start_addr;
                     data.copy_from_slice(&mem[address as usize..(address + 4) as usize]);
                     RawDataWord::Word32(data)
                 } else {
@@ -239,6 +250,7 @@ impl Project {
             WordSize::Bit16 => {
                 let mut data = [0; 2];
                 if address >= self.start_addr && (address + 1) <= self.end_addr {
+                    let address = address - self.start_addr;
                     data.copy_from_slice(&mem[address as usize..(address + 2) as usize]);
                     RawDataWord::Word16(data)
                 } else {
