@@ -4,7 +4,7 @@ use armv6_m_instruction_parser::parse;
 use object::{Object, ObjectSection, ObjectSymbol};
 use tracing::debug;
 
-use crate::memory::MemoryError;
+use crate::{memory::MemoryError, general_assembly::translator::Translator};
 
 use super::{instruction::Instruction, DataHalfWord, DataWord, Endianness, RawDataWord, WordSize};
 
@@ -137,7 +137,7 @@ impl Project {
                 // probobly right add more cheks later or custom enum etc.
                 let arm_instruction = parse(data).unwrap();
                 debug!("instruction read: {:?}", arm_instruction);
-                todo!()
+                Ok(arm_instruction.translate())
             }
             _ => todo!(),
         }

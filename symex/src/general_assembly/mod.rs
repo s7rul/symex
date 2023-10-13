@@ -5,6 +5,8 @@ pub mod path_selection;
 pub mod project;
 pub mod state;
 pub mod vm;
+pub mod translator;
+pub mod translators;
 
 pub type Result<T> = std::result::Result<T, GAError>;
 
