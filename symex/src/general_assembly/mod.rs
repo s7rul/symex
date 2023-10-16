@@ -1,12 +1,14 @@
+use crate::memory::MemoryError;
+
 use self::project::ProjectError;
 
 pub mod instruction;
 pub mod path_selection;
 pub mod project;
 pub mod state;
-pub mod vm;
 pub mod translator;
 pub mod translators;
+pub mod vm;
 
 pub type Result<T> = std::result::Result<T, GAError>;
 
@@ -15,8 +17,14 @@ pub enum GAError {
     #[error("Project error: {0}")]
     ProjectError(#[from] ProjectError),
 
+    #[error("Memmory error: {0}")]
+    MemmoryError(#[from] MemoryError),
+
     #[error("Entry function {0} not found.")]
     EntryFunctionNotFound(String),
+
+    #[error("Writing to static memory not permited.")]
+    WritingToStaticMemoryProhibited,
 }
 
 #[derive(Debug, Clone, Copy)]

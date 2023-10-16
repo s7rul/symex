@@ -1,12 +1,12 @@
 //! Holds the state in general assembly execution.
 
-use std::collections::HashMap;
+use std::{collections::HashMap, rc::Rc};
 
 use tracing::debug;
 
 use crate::{
     general_assembly::{GAError, Result},
-    memory::ObjectMemory,
+    memory::{MemoryError, ObjectMemory},
     smt::{DContext, DExpr, DSolver},
     util::Variable,
 };
@@ -73,5 +73,54 @@ impl GAState {
 
     pub fn get_next_instruction(&self) -> Result<Instruction> {
         Ok(self.project.get_instruction(self.pc_register)?)
+    }
+
+    fn read_word_from_memory_no_static(&self, address: &DExpr) -> Result<DExpr> {
+        Ok(self.memory.read(address, self.project.get_word_size())?)
+    }
+
+    fn write_word_from_memory_no_static(&mut self, address: &DExpr, value: DExpr) -> Result<()> {
+        Ok(self.memory.write(address, value)?)
+    }
+
+    pub fn read_word_from_memory(&self, address: &DExpr) -> Result<DExpr> {
+        match address.get_constant() {
+            Some(address_const) => {
+                if self.project.address_in_range(address_const) {
+                    // read from static memmory in project
+                    let value = match self.project.get_word(address_const)? {
+                        crate::general_assembly::DataWord::Word64(data) => {
+                            self.ctx.from_u64(data, 64)
+                        }
+                        crate::general_assembly::DataWord::Word32(data) => {
+                            self.ctx.from_u64(data as u64, 32)
+                        }
+                        crate::general_assembly::DataWord::Word16(data) => self.ctx.from_u64(data as u64, 16),
+                        crate::general_assembly::DataWord::Word8(data) => self.ctx.from_u64(data as u64, 8),
+                    };
+                    Ok(value)
+                } else {
+                    self.read_word_from_memory_no_static(address)
+                }
+            }
+
+            // For non constant addresses always read non_static memmory
+            None => self.read_word_from_memory_no_static(address),
+        }
+    }
+
+    pub fn write_word_to_memory(&mut self, address: &DExpr, value: DExpr) -> Result<()> {
+        match address.get_constant() {
+            Some(address_const) => {
+                if self.project.address_in_range(address_const) {
+                    Err(GAError::WritingToStaticMemoryProhibited)
+                } else {
+                    self.write_word_from_memory_no_static(address, value)
+                }
+            }
+
+            // For non constant addresses always read non_static memmory
+            None => self.write_word_from_memory_no_static(address, value),
+        }
     }
 }

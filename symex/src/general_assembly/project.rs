@@ -4,7 +4,7 @@ use armv6_m_instruction_parser::parse;
 use object::{Object, ObjectSection, ObjectSymbol};
 use tracing::debug;
 
-use crate::{memory::MemoryError, general_assembly::translator::Translator};
+use crate::{general_assembly::translator::Translator, memory::MemoryError};
 
 use super::{instruction::Instruction, DataHalfWord, DataWord, Endianness, RawDataWord, WordSize};
 
@@ -101,6 +101,14 @@ impl Project {
             program_memory: text_data,
             symtab,
         })
+    }
+
+    pub fn address_in_range(&self, address: u64) -> bool {
+        address >= self.start_addr && address <= self.end_addr
+    }
+
+    pub fn get_word_size(&self) -> u32 {
+        self.get_ptr_size() // same for now
     }
 
     pub fn get_ptr_size(&self) -> u32 {
