@@ -2,10 +2,13 @@
 
 use super::DataWord;
 
+#[derive(Debug)]
 pub struct Instruction {
+    pub instruction_size: u32,
     pub operations: Vec<Operation>,
 }
 
+#[derive(Debug)]
 pub enum Operation {
     /// No operation
     Nop,
@@ -82,6 +85,15 @@ pub enum Operation {
         shift: Operand,
     },
 
+    /// Unconditional jump
+    Jump { destination: Operand },
+
+    /// Conditional jump
+    ConditionalJump {
+        destination: Operand,
+        condition: Condition,
+    },
+
     /// Set the negative flag
     SetNFlag(Operand),
 
@@ -108,6 +120,29 @@ pub enum Operation {
     },
 }
 
+#[derive(Debug, PartialEq, Clone, Copy)]
+pub enum Condition {
+    /// Equal
+    EQ,
+
+    /// Not Equal
+    NE,
+    CS,
+    CC,
+    MI,
+    PL,
+    VS,
+    VC,
+    HI,
+    LS,
+    GE,
+    LT,
+    GT,
+    LE,
+    None,
+}
+
+#[derive(Debug, Clone)]
 pub enum Operand {
     Register(String),
     Immidiate(DataWord),
@@ -116,4 +151,5 @@ pub enum Operand {
         address: DataWord,
         offset_reg: String,
     },
+    Local(String),
 }

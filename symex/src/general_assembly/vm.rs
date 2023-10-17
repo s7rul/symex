@@ -47,6 +47,8 @@ impl VM {
             for constraint in path.constraints {
                 executor.state.constraints.assert(&constraint);
             }
+
+            let result = executor.resume_execution()?;
         }
         Ok(None)
     }

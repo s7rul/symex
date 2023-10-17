@@ -19,7 +19,7 @@ pub struct GAState {
     pub ctx: &'static DContext,
     pub constraints: DSolver,
     pub marked_symbolic: Vec<Variable>,
-    memory: ObjectMemory,
+    pub memory: ObjectMemory,
     pub cycle_count: u128,
     registers: HashMap<String, DExpr>,
     pc_register: u64, // this register is special
@@ -40,6 +40,9 @@ impl GAState {
         let ptr_size = project.get_ptr_size();
 
         let memory = ObjectMemory::new(ctx, ptr_size, constraints.clone());
+        let mut registers = HashMap::new();
+        let pc_expr = ctx.from_u64(pc_reg, 64);
+        registers.insert("PC".to_owned(), pc_expr);
 
         Ok(GAState {
             project,
@@ -48,7 +51,7 @@ impl GAState {
             marked_symbolic: Vec::new(),
             memory,
             cycle_count: 0,
-            registers: HashMap::new(),
+            registers,
             pc_register: pc_reg,
         })
     }
@@ -62,9 +65,17 @@ impl GAState {
                 Some(v) => v,
                 None => todo!("handle branch to symbolic address"),
             };
-
-            self.registers.insert(register, expr);
+            self.pc_register = value;
         }
+        self.registers.insert(register, expr);
+    }
+
+    pub fn set_pc(&mut self, value: u64) {
+        self.pc_register = value
+    }
+
+    pub fn get_pc(&self) -> u64 {
+        self.pc_register
     }
 
     pub fn get_register(&self, register: String) -> Option<&DExpr> {
