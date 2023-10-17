@@ -95,8 +95,12 @@ impl GAState {
                         crate::general_assembly::DataWord::Word32(data) => {
                             self.ctx.from_u64(data as u64, 32)
                         }
-                        crate::general_assembly::DataWord::Word16(data) => self.ctx.from_u64(data as u64, 16),
-                        crate::general_assembly::DataWord::Word8(data) => self.ctx.from_u64(data as u64, 8),
+                        crate::general_assembly::DataWord::Word16(data) => {
+                            self.ctx.from_u64(data as u64, 16)
+                        }
+                        crate::general_assembly::DataWord::Word8(data) => {
+                            self.ctx.from_u64(data as u64, 8)
+                        }
                     };
                     Ok(value)
                 } else {

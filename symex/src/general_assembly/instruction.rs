@@ -34,6 +34,54 @@ pub enum Operation {
         operand2: Operand,
     },
 
+    /// And
+    /// destination = operand1 & operand2
+    And {
+        destination: Operand,
+        operand1: Operand,
+        operand2: Operand,
+    },
+
+    /// Or
+    /// destination = operand1 | operand2
+    Or {
+        destination: Operand,
+        operand1: Operand,
+        operand2: Operand,
+    },
+
+    /// Xor
+    /// destination = operand1 ^ operand2
+    Xor {
+        destination: Operand,
+        operand1: Operand,
+        operand2: Operand,
+    },
+
+    /// Shift left
+    /// destination = operand << shift
+    Sl {
+        destination: Operand,
+        operand: Operand,
+        shift: Operand,
+    },
+
+    /// Shift rigt logical
+    /// destination = operand >> shift
+    Srl {
+        destionation: Operand,
+        operand: Operand,
+        shift: Operand,
+    },
+
+    /// Shift rigt arithmetic
+    /// destination = operand >> shift
+    Sra {
+        destination: Operand,
+        operand: Operand,
+        shift: Operand,
+    },
+
     /// Set the negative flag
     SetNFlag(Operand),
 

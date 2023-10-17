@@ -5,7 +5,12 @@ use crate::{
     smt::{DContext, DSolver},
 };
 
-use super::{path_selection::DFSPathSelection, project::Project, Config, GAError, Result};
+use super::{
+    executor::{self, GAExecutor},
+    path_selection::DFSPathSelection,
+    project::Project,
+    Config, GAError, Result,
+};
 
 #[derive(Debug)]
 pub struct VM {
@@ -37,6 +42,11 @@ impl VM {
         while let Some(path) = self.paths.get_path() {
             // try stuff
             let next_instruction = path.state.get_next_instruction().unwrap();
+            let mut executor = GAExecutor::from_state(path.state, self, self.project);
+
+            for constraint in path.constraints {
+                executor.state.constraints.assert(&constraint);
+            }
         }
         Ok(None)
     }

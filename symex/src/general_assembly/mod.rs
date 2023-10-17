@@ -1,7 +1,8 @@
-use crate::memory::MemoryError;
+use crate::{memory::MemoryError, smt::SolverError};
 
 use self::project::ProjectError;
 
+pub mod executor;
 pub mod instruction;
 pub mod path_selection;
 pub mod project;
@@ -18,7 +19,7 @@ pub enum GAError {
     ProjectError(#[from] ProjectError),
 
     #[error("Memmory error: {0}")]
-    MemmoryError(#[from] MemoryError),
+    MemoryError(#[from] MemoryError),
 
     #[error("Entry function {0} not found.")]
     EntryFunctionNotFound(String),
