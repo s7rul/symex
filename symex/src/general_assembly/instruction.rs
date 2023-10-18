@@ -72,7 +72,7 @@ pub enum Operation {
     /// Shift rigt logical
     /// destination = operand >> shift
     Srl {
-        destionation: Operand,
+        destination: Operand,
         operand: Operand,
         shift: Operand,
     },
@@ -83,6 +83,14 @@ pub enum Operation {
         destination: Operand,
         operand: Operand,
         shift: Operand,
+    },
+
+    /// Zero extend
+    /// Zero exstends bits bits from operand and stores it in destination.
+    ZeroExtend {
+        destination: Operand,
+        operand: Operand,
+        bits: u32,
     },
 
     /// Unconditional jump
@@ -104,16 +112,18 @@ pub enum Operation {
     SetCFlag {
         operand1: Operand,
         operand2: Operand,
+        sub: bool,
     },
 
     /// Set overfolow flag
     SetVFlag {
         operand1: Operand,
         operand2: Operand,
+        sub: bool,
     },
 
     /// Do all the operations in operations for each operand.
-    /// The current operand is stored in the scratch pad as CurrentOperand.
+    /// The current operand is stored in local as CurrentOperand.
     ForEach {
         operands: Vec<Operand>,
         operations: Vec<Operation>,
@@ -146,6 +156,7 @@ pub enum Condition {
 pub enum Operand {
     Register(String),
     Immidiate(DataWord),
+    AddressInLocal(String),
     Address(DataWord),
     AddressWithOffset {
         address: DataWord,

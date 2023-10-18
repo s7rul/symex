@@ -48,13 +48,40 @@ impl Translator for Instruction {
                         operand1: Operand::Local("PC".to_owned()),
                         operand2: Operand::Immidiate(DataWord::Word32(*imm)),
                     },
-                    GAOperation::Jump { destination: Operand::Local("newPC".to_owned()) }
+                    GAOperation::Jump {
+                        destination: Operand::Local("newPC".to_owned()),
+                    },
                 ],
             },
             Operation::BLXReg { m } => todo!(),
             Operation::BX { m } => todo!(),
             Operation::CMNReg { m, n } => todo!(),
-            Operation::CMPImm { n, imm } => todo!(),
+            Operation::CMPImm { n, imm } => {
+                let op_n = arm_register_to_ga_operand(n);
+                let op_imm = Operand::Immidiate(DataWord::Word32(*imm));
+                GAInstruction {
+                    instruction_size: 16,
+                    operations: vec![
+                        GAOperation::Sub {
+                            destination: Operand::Local("result".to_owned()),
+                            operand1: op_n.clone(),
+                            operand2: op_imm.clone(),
+                        },
+                        GAOperation::SetNFlag(Operand::Local("result".to_owned())),
+                        GAOperation::SetZFlag(Operand::Local("result".to_owned())),
+                        GAOperation::SetCFlag {
+                            operand1: op_n.clone(),
+                            operand2: op_imm.clone(),
+                            sub: true,
+                        },
+                        GAOperation::SetVFlag {
+                            operand1: op_n.clone(),
+                            operand2: op_imm.clone(),
+                            sub: true,
+                        },
+                    ],
+                }
+            }
             Operation::CMPReg { m, n } => todo!(),
             Operation::CPS { im } => todo!(),
             Operation::CPY => todo!(),
@@ -103,13 +130,39 @@ impl Translator for Instruction {
             Operation::NOP => todo!(),
             Operation::ORRReg { m, dn } => todo!(),
             Operation::POP { reg_list } => todo!(),
-            Operation::PUSH { reg_list } => GAInstruction {
-                instruction_size: 16,
-                operations: vec![GAOperation::ForEach {
-                    operands: arm_reg_list_to_ga_op_list(reg_list),
-                    operations: vec![], // TODO add instuctions here
-                }],
-            },
+            Operation::PUSH { reg_list } => {
+                let mut operations: Vec<GAOperation> = vec![];
+                // set up base address
+                operations.push(GAOperation::Sub {
+                    destination: Operand::Local("Address".to_owned()),
+                    operand1: Operand::Register("SP".to_owned()),
+                    operand2: Operand::Immidiate(DataWord::Word32((4 * reg_list.len()) as u32)),
+                });
+                for reg in reg_list {
+                    // write register to memory
+                    operations.push(GAOperation::Move {
+                        destination: Operand::AddressInLocal("Address".to_owned()),
+                        source: arm_register_to_ga_operand(reg),
+                    });
+                    // update address
+                    operations.push(GAOperation::Add {
+                        destination: Operand::Local("Address".to_owned()),
+                        operand1: Operand::Local("Address".to_owned()),
+                        operand2: Operand::Immidiate(DataWord::Word32(4)),
+                    })
+                }
+                // update SP
+                operations.push(GAOperation::Sub {
+                    destination: Operand::Register("SP".to_owned()),
+                    operand1: Operand::Register("SP".to_owned()),
+                    operand2: Operand::Immidiate(DataWord::Word32((4 * reg_list.len()) as u32)),
+                });
+
+                GAInstruction {
+                    instruction_size: 16,
+                    operations,
+                }
+            }
             Operation::REV { m, d } => todo!(),
             Operation::REV16 { m, d } => todo!(),
             Operation::REVSH { m, d } => todo!(),
@@ -133,7 +186,14 @@ impl Translator for Instruction {
             Operation::TSTReg { m, n } => todo!(),
             Operation::UDFT1 { imm } => todo!(),
             Operation::UDFT2 { imm } => todo!(),
-            Operation::UXTB { m, d } => todo!(),
+            Operation::UXTB { m, d } => GAInstruction {
+                instruction_size: 16,
+                operations: vec![GAOperation::ZeroExtend {
+                    destination: arm_register_to_ga_operand(d),
+                    operand: arm_register_to_ga_operand(m),
+                    bits: 8,
+                }],
+            },
             Operation::UXTH { m, d } => todo!(),
             Operation::WFE => todo!(),
             Operation::WFI => todo!(),

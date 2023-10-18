@@ -15,7 +15,7 @@ use super::{instruction::Instruction, project::Project};
 
 #[derive(Clone, Debug)]
 pub struct GAState {
-    project: &'static Project,
+    pub project: &'static Project,
     pub ctx: &'static DContext,
     pub constraints: DSolver,
     pub marked_symbolic: Vec<Variable>,
@@ -23,6 +23,7 @@ pub struct GAState {
     pub cycle_count: u128,
     registers: HashMap<String, DExpr>,
     pc_register: u64, // this register is special
+    flags: HashMap<String, DExpr>,
 }
 
 impl GAState {
@@ -44,6 +45,12 @@ impl GAState {
         let pc_expr = ctx.from_u64(pc_reg, 64);
         registers.insert("PC".to_owned(), pc_expr);
 
+        let mut flags = HashMap::new();
+        flags.insert("N".to_owned(), ctx.unconstrained(1, "flags.N"));
+        flags.insert("Z".to_owned(), ctx.unconstrained(1, "flags.Z"));
+        flags.insert("C".to_owned(), ctx.unconstrained(1, "flags.C"));
+        flags.insert("V".to_owned(), ctx.unconstrained(1, "flags.V"));
+
         Ok(GAState {
             project,
             ctx,
@@ -53,6 +60,7 @@ impl GAState {
             cycle_count: 0,
             registers,
             pc_register: pc_reg,
+            flags,
         })
     }
 
@@ -78,8 +86,22 @@ impl GAState {
         self.pc_register
     }
 
-    pub fn get_register(&self, register: String) -> Option<&DExpr> {
-        self.registers.get(&register)
+    pub fn get_register(&self, register: String) -> Option<DExpr> {
+        match self.registers.get(&register) {
+            Some(v) => Some(v.to_owned()),
+            None => None,
+        }
+    }
+
+    pub fn set_flag(&mut self, flag: String, expr: DExpr) {
+        self.flags.insert(flag, expr);
+    }
+
+    pub fn get_flag(&mut self, flag: String) -> Option<DExpr> {
+        match self.flags.get(&flag) {
+            Some(v) => Some(v.to_owned()),
+            None => todo!(),
+        }
     }
 
     pub fn get_next_instruction(&self) -> Result<Instruction> {

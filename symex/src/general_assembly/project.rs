@@ -35,6 +35,22 @@ pub struct Project {
 }
 
 impl Project {
+    pub fn create_dummy(
+        word_size: WordSize,
+        endianness: Endianness,
+        architecture: object::Architecture,
+    ) -> Self {
+        Self {
+            program_memory: vec![],
+            start_addr: 0,
+            end_addr: 0,
+            word_size,
+            endianness,
+            architecture,
+            symtab: HashMap::new(),
+        }
+    }
+
     pub fn from_path(path: &str) -> Result<Self> {
         debug!("Parsing elf file: {}", path);
         let file = fs::read(path).expect("Unable to open file.");
