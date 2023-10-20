@@ -11,7 +11,10 @@ use crate::{
     util::Variable,
 };
 
-use super::{instruction::Instruction, project::Project};
+use super::{
+    instruction::{Condition, Instruction},
+    project::Project,
+};
 
 #[derive(Clone, Debug)]
 pub struct GAState {
@@ -21,9 +24,10 @@ pub struct GAState {
     pub marked_symbolic: Vec<Variable>,
     pub memory: ObjectMemory,
     pub cycle_count: u128,
-    registers: HashMap<String, DExpr>,
+    pub registers: HashMap<String, DExpr>,
     pc_register: u64, // this register is special
     flags: HashMap<String, DExpr>,
+    end_pc: u64,
 }
 
 impl GAState {
@@ -42,8 +46,13 @@ impl GAState {
 
         let memory = ObjectMemory::new(ctx, ptr_size, constraints.clone());
         let mut registers = HashMap::new();
-        let pc_expr = ctx.from_u64(pc_reg, 64);
+        let pc_expr = ctx.from_u64(pc_reg, ptr_size);
         registers.insert("PC".to_owned(), pc_expr);
+
+        // set the link register to max value to detect when returning from a function
+        let end_pc_expr = ctx.unsigned_max(ptr_size);
+        let end_pc = end_pc_expr.get_constant().unwrap(); // we know it is constant
+        registers.insert("LR".to_owned(), end_pc_expr);
 
         let mut flags = HashMap::new();
         flags.insert("N".to_owned(), ctx.unconstrained(1, "flags.N"));
@@ -61,6 +70,7 @@ impl GAState {
             registers,
             pc_register: pc_reg,
             flags,
+            end_pc,
         })
     }
 
@@ -104,8 +114,39 @@ impl GAState {
         }
     }
 
-    pub fn get_next_instruction(&self) -> Result<Instruction> {
-        Ok(self.project.get_instruction(self.pc_register)?)
+    pub fn get_expr(&mut self, condition: &Condition) -> Result<DExpr> {
+        Ok(match condition {
+            Condition::EQ => self
+                .get_flag("Z".to_owned())
+                .unwrap()
+                ._eq(&self.ctx.from_bool(true)),
+            Condition::NE => self
+                .get_flag("Z".to_owned())
+                .unwrap()
+                ._eq(&self.ctx.from_bool(false)),
+            Condition::CS => todo!(),
+            Condition::CC => todo!(),
+            Condition::MI => todo!(),
+            Condition::PL => todo!(),
+            Condition::VS => todo!(),
+            Condition::VC => todo!(),
+            Condition::HI => todo!(),
+            Condition::LS => todo!(),
+            Condition::GE => todo!(),
+            Condition::LT => todo!(),
+            Condition::GT => todo!(),
+            Condition::LE => todo!(),
+            Condition::None => self.ctx.from_bool(true),
+        })
+    }
+
+    pub fn get_next_instruction(&self) -> Result<Option<Instruction>> {
+        let pc = self.pc_register;
+        if pc == self.end_pc {
+            Ok(None)
+        } else {
+            Ok(Some(self.project.get_instruction(self.pc_register)?))
+        }
     }
 
     fn read_word_from_memory_no_static(&self, address: &DExpr) -> Result<DExpr> {

@@ -26,6 +26,9 @@ pub enum GAError {
 
     #[error("Writing to static memory not permited.")]
     WritingToStaticMemoryProhibited,
+
+    #[error("Solver error.")]
+    SolverError(#[from] SolverError),
 }
 
 #[derive(Debug, Clone, Copy)]

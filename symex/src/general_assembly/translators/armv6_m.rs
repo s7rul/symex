@@ -5,10 +5,15 @@ use armv6_m_instruction_parser::{
     registers::Register,
 };
 
-use crate::general_assembly::{instruction::Operand, translator::Translator, DataWord};
+use crate::general_assembly::{
+    instruction::{Condition, Operand},
+    translator::Translator,
+    DataWord,
+};
 
 type GAInstruction = crate::general_assembly::instruction::Instruction;
 type GAOperation = crate::general_assembly::instruction::Operation;
+type ArmCodition = armv6_m_instruction_parser::conditions::Condition;
 
 impl Translator for Instruction {
     fn translate(&self) -> GAInstruction {
@@ -29,7 +34,23 @@ impl Translator for Instruction {
             Operation::ANDReg { m, dn } => todo!(),
             Operation::ASRImm { imm, m, d } => todo!(),
             Operation::ASRReg { m, dn } => todo!(),
-            Operation::B { cond, imm } => todo!(),
+            Operation::B { cond, imm } => {
+                let imm = imm + 2; // Beacause arm always adds as a 32 bit instruction.
+                GAInstruction {
+                    instruction_size: 16,
+                    operations: vec![
+                        GAOperation::Add {
+                            destination: Operand::Local("new_pc".to_owned()),
+                            operand1: Operand::Register("PC".to_owned()),
+                            operand2: Operand::Immidiate(DataWord::Word32(imm)),
+                        },
+                        GAOperation::ConditionalJump {
+                            destination: Operand::Local("new_pc".to_owned()),
+                            condition: arm_cond_to_ga_cond(cond),
+                        },
+                    ],
+                }
+            }
             Operation::BICReg { m, dn } => todo!(),
             Operation::BKPT { imm } => todo!(),
             Operation::BL { imm } => GAInstruction {
@@ -54,7 +75,17 @@ impl Translator for Instruction {
                 ],
             },
             Operation::BLXReg { m } => todo!(),
-            Operation::BX { m } => todo!(),
+            Operation::BX { m } => {
+                let reg = arm_register_to_ga_operand(m);
+                let destination = arm_register_to_ga_operand(&Register::PC);
+                GAInstruction {
+                    instruction_size: 16,
+                    operations: vec![GAOperation::Move {
+                        destination,
+                        source: reg,
+                    }],
+                }
+            }
             Operation::CMNReg { m, n } => todo!(),
             Operation::CMPImm { n, imm } => {
                 let op_n = arm_register_to_ga_operand(n);
@@ -103,7 +134,22 @@ impl Translator for Instruction {
             Operation::LSLReg { m, dn } => todo!(),
             Operation::LSRImm { imm, m, d } => todo!(),
             Operation::LSRReg { m, dn } => todo!(),
-            Operation::MOVImm { d, imm } => todo!(),
+            Operation::MOVImm { d, imm } => {
+                let destination = arm_register_to_ga_operand(d);
+                let source = Operand::Immidiate(DataWord::Word32(*imm));
+
+                GAInstruction {
+                    instruction_size: 16,
+                    operations: vec![
+                        GAOperation::Move {
+                            destination: destination.clone(),
+                            source,
+                        },
+                        GAOperation::SetNFlag(destination.clone()),
+                        GAOperation::SetZFlag(destination),
+                    ],
+                }
+            }
             Operation::MOVReg { m, d, set_flags } => {
                 let destination = arm_register_to_ga_operand(d);
                 let source = arm_register_to_ga_operand(m);
@@ -221,6 +267,26 @@ fn arm_register_to_ga_operand(reg: &Register) -> Operand {
         Register::LR => "LR".to_owned(),
         Register::PC => "PC".to_owned(),
     })
+}
+
+fn arm_cond_to_ga_cond(conditon: &ArmCodition) -> Condition {
+    match conditon {
+        armv6_m_instruction_parser::conditions::Condition::EQ => Condition::EQ,
+        armv6_m_instruction_parser::conditions::Condition::NE => Condition::NE,
+        armv6_m_instruction_parser::conditions::Condition::CS => Condition::CS,
+        armv6_m_instruction_parser::conditions::Condition::CC => Condition::CC,
+        armv6_m_instruction_parser::conditions::Condition::MI => Condition::MI,
+        armv6_m_instruction_parser::conditions::Condition::PL => Condition::PL,
+        armv6_m_instruction_parser::conditions::Condition::VS => Condition::VS,
+        armv6_m_instruction_parser::conditions::Condition::VC => Condition::VC,
+        armv6_m_instruction_parser::conditions::Condition::HI => Condition::HI,
+        armv6_m_instruction_parser::conditions::Condition::LS => Condition::LS,
+        armv6_m_instruction_parser::conditions::Condition::GE => Condition::GE,
+        armv6_m_instruction_parser::conditions::Condition::LT => Condition::LT,
+        armv6_m_instruction_parser::conditions::Condition::GT => Condition::GT,
+        armv6_m_instruction_parser::conditions::Condition::LE => Condition::LE,
+        armv6_m_instruction_parser::conditions::Condition::None => Condition::None,
+    }
 }
 
 fn arm_reg_list_to_ga_op_list(reg_list: &Vec<Register>) -> Vec<Operand> {

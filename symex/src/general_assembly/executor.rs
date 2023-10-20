@@ -2,15 +2,15 @@
 
 use std::collections::HashMap;
 
-use tracing::trace;
+use tracing::{debug, trace};
 
 use crate::{
     general_assembly::path_selection::Path,
-    smt::{DContext, DExpr},
+    smt::{DContext, DExpr, SolverError},
 };
 
 use super::{
-    instruction::{Instruction, Operand},
+    instruction::{Condition, Instruction, Operand},
     project::Project,
     state::GAState,
     vm::VM,
@@ -36,8 +36,17 @@ impl<'vm> GAExecutor<'vm> {
     }
 
     pub fn resume_execution(&mut self) -> Result<PathResult> {
-        for _ in 0..5 {
-            let instruction = self.state.get_next_instruction()?;
+        loop {
+            let instruction = match self.state.get_next_instruction()? {
+                Some(v) => v,
+                None => {
+                    debug!("Symbolic execution ended succesfully");
+                    for (reg_name, reg_value) in &self.state.registers {
+                        debug!("{}: {:?}", reg_name, reg_value.clone().simplify())
+                    }
+                    return Ok(PathResult::Success(None));
+                }
+            };
             trace!("executing instruction: {:?}", instruction);
             self.execute_instruction(&instruction)?;
         }
@@ -49,6 +58,20 @@ impl<'vm> GAExecutor<'vm> {
         let forked_state = self.state.clone();
         let path = Path::new(forked_state, Some(constraint));
 
+        self.vm.paths.save_path(path);
+        Ok(())
+    }
+
+    fn fork_and_jump(&mut self, new_pc: DExpr, constraint: Option<DExpr>) -> Result<()> {
+        trace!(
+            "Save backtracking path: constrint={:?}, new_pc={:?}",
+            constraint,
+            new_pc
+        );
+
+        let mut state = self.state.clone();
+        state.set_register("PC".to_owned(), new_pc);
+        let path = Path::new(state, constraint);
         self.vm.paths.save_path(path);
         Ok(())
     }
@@ -141,7 +164,12 @@ impl<'vm> GAExecutor<'vm> {
         let new_pc = self.state.get_register("PC".to_owned()).unwrap();
         self.state.set_register(
             "PC".to_owned(),
-            new_pc.add(&self.state.ctx.from_u64((i.instruction_size / 8) as u64, 64)),
+            new_pc.add(
+                &self
+                    .state
+                    .ctx
+                    .from_u64((i.instruction_size / 8) as u64, self.project.get_ptr_size()),
+            ),
         );
 
         // initiate local variable storage
@@ -162,7 +190,12 @@ impl<'vm> GAExecutor<'vm> {
                     destination,
                     operand1,
                     operand2,
-                } => todo!(),
+                } => {
+                    let op1 = self.get_operand_value(operand1, &local);
+                    let op2 = self.get_operand_value(operand2, &local);
+                    let result = op1.add(&op2);
+                    self.set_operand_value(destination, result, &mut local);
+                }
                 crate::general_assembly::instruction::Operation::Sub {
                     destination,
                     operand1,
@@ -177,7 +210,12 @@ impl<'vm> GAExecutor<'vm> {
                     destination,
                     operand1,
                     operand2,
-                } => todo!(),
+                } => {
+                    let op1 = self.get_operand_value(operand1, &local);
+                    let op2 = self.get_operand_value(operand2, &local);
+                    let result = op1.sub(&op2);
+                    self.set_operand_value(destination, result, &mut local);
+                }
                 crate::general_assembly::instruction::Operation::Or {
                     destination,
                     operand1,
@@ -217,22 +255,80 @@ impl<'vm> GAExecutor<'vm> {
                 crate::general_assembly::instruction::Operation::ConditionalJump {
                     destination,
                     condition,
-                } => todo!(),
+                } => {
+                    let c = self.state.get_expr(condition)?.simplify();
+
+                    // if constant just jump
+                    if let Some(constant_c) = c.get_constant_bool() {
+                        if constant_c {
+                            let destination = self.get_operand_value(destination, &local);
+                            self.state.set_register("PC".to_owned(), destination);
+                        }
+                        return Ok(());
+                    }
+
+                    let true_possible = self.state.constraints.is_sat_with_constraint(&c)?;
+                    let false_possible = self.state.constraints.is_sat_with_constraint(&c.not())?;
+
+                    let destination: DExpr = match (true_possible, false_possible) {
+                        (true, true) => {
+                            self.fork(c.not());
+                            self.state.constraints.assert(&c);
+                            Ok(self.get_operand_value(destination, &local))
+                        }
+                        (true, false) => Ok(self.get_operand_value(destination, &local)),
+                        (false, true) => Ok(self.state.get_register("PC".to_owned()).unwrap()), // safe to asume PC exist
+                        (false, false) => Err(SolverError::Unsat),
+                    }?;
+
+                    self.state.set_register("PC".to_owned(), destination);
+                }
                 crate::general_assembly::instruction::Operation::SetNFlag(operand) => {
                     let value = self.get_operand_value(operand, &local);
-                    let result = value._eq(&self.state.ctx.zero(self.project.get_word_size()));
+                    let shift = self
+                        .state
+                        .ctx
+                        .from_u64((self.project.get_word_size() - 1) as u64, 32);
+                    let result = value.srl(&shift).resize_unsigned(1);
+                    self.state.set_flag("N".to_owned(), result);
                 }
-                crate::general_assembly::instruction::Operation::SetZFlag(_) => todo!(),
+                crate::general_assembly::instruction::Operation::SetZFlag(operand) => {
+                    let value = self.get_operand_value(operand, &local);
+                    let result = value._eq(&self.state.ctx.zero(self.project.get_word_size()));
+                    self.state.set_flag("Z".to_owned(), result);
+                }
                 crate::general_assembly::instruction::Operation::SetCFlag {
                     operand1,
                     operand2,
                     sub,
-                } => todo!(),
+                } => {
+                    let op1 = self.get_operand_value(operand1, &local);
+                    let op2 = self.get_operand_value(operand2, &local);
+
+                    let result = if *sub {
+                        op1.usubo(&op2)
+                    } else {
+                        op1.uaddo(&op2)
+                    };
+
+                    self.state.set_flag("C".to_owned(), result);
+                }
                 crate::general_assembly::instruction::Operation::SetVFlag {
                     operand1,
                     operand2,
                     sub,
-                } => todo!(),
+                } => {
+                    let op1 = self.get_operand_value(operand1, &local);
+                    let op2 = self.get_operand_value(operand2, &local);
+
+                    let result = if *sub {
+                        op1.ssubo(&op2)
+                    } else {
+                        op1.saddo(&op2)
+                    };
+
+                    self.state.set_flag("C".to_owned(), result);
+                }
                 crate::general_assembly::instruction::Operation::ForEach {
                     operands,
                     operations,
@@ -243,23 +339,12 @@ impl<'vm> GAExecutor<'vm> {
                     bits,
                 } => {
                     let op = self.get_operand_value(operand, &local);
-                    let result = op.zero_ext(*bits);
+                    let valid_bits = op.resize_unsigned(*bits);
+                    let result = valid_bits.zero_ext(self.project.get_word_size());
+                    self.set_operand_value(destination, result, &mut local);
                 }
             }
         }
         Ok(())
     }
-}
-
-#[test]
-fn test_operation_zero_extend() {
-    let context = Box::new(DContext::new());
-    let context = Box::leak(context);
-
-    let project = Box::new(Project::create_dummy(
-        super::WordSize::Bit32,
-        super::Endianness::Little,
-        object::Architecture::Arm,
-    ));
-    let project = Box::leak(project);
 }

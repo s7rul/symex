@@ -6,7 +6,7 @@ use crate::{
 };
 
 use super::{
-    executor::{self, GAExecutor},
+    executor::{self, GAExecutor, PathResult},
     path_selection::DFSPathSelection,
     project::Project,
     Config, GAError, Result,
@@ -20,11 +20,6 @@ pub struct VM {
 
 impl VM {
     pub fn new(project: &'static Project, ctx: &'static DContext, fn_name: &str) -> Result<Self> {
-        let entry_addr = match project.get_symbol_address(fn_name) {
-            Some(addr) => addr,
-            None => return Err(GAError::EntryFunctionNotFound(fn_name.to_owned())),
-        };
-
         let mut vm = Self {
             project,
             paths: DFSPathSelection::new(),
@@ -38,10 +33,9 @@ impl VM {
         Ok(vm)
     }
 
-    pub fn run(&mut self) -> Result<Option<GAState>> {
+    pub fn run(&mut self) -> Result<Option<(PathResult, GAState)>> {
         while let Some(path) = self.paths.get_path() {
             // try stuff
-            let next_instruction = path.state.get_next_instruction().unwrap();
             let mut executor = GAExecutor::from_state(path.state, self, self.project);
 
             for constraint in path.constraints {
@@ -49,6 +43,7 @@ impl VM {
             }
 
             let result = executor.resume_execution()?;
+            return Ok(Some((result, executor.state)));
         }
         Ok(None)
     }

@@ -73,9 +73,44 @@ pub fn run_elf(
     info!("create VM");
     let mut vm = general_assembly::vm::VM::new(project, context, function)?;
 
-    let state = vm.run().unwrap().unwrap();
-
+    run_elf_paths(&mut vm)?;
     todo!()
+}
+
+type GAPathResult = general_assembly::executor::PathResult;
+
+fn run_elf_paths(vm: &mut general_assembly::vm::VM) -> Result<(), GAError> {
+    let mut path_num = 0;
+    let start = Instant::now();
+    while let Some((path_result, mut state)) = vm.run()? {
+        if matches!(path_result, GAPathResult::Suppress) {
+            debug!("Suppressing path");
+            continue;
+        }
+        if matches!(path_result, GAPathResult::AssumptionUnsat) {
+            println!("Encountered an unsatisfiable assumption, ignoring this path");
+            continue;
+        }
+
+        path_num += 1;
+
+        let v_path_result = match path_result {
+            general_assembly::executor::PathResult::Success(v) => PathStatus::Ok(None),
+            general_assembly::executor::PathResult::Faliure => todo!(),
+            general_assembly::executor::PathResult::AssumptionUnsat => todo!(),
+            general_assembly::executor::PathResult::Suppress => todo!(),
+        };
+
+        let result = VisualPathResult {
+            path: path_num,
+            result: v_path_result,
+            inputs: vec![],
+            symbolics: vec![],
+        };
+        println!("{}", result);
+    }
+    println!("time: {:?}", start.elapsed());
+    Ok(())
 }
 
 pub fn run(
