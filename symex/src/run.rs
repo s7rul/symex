@@ -10,7 +10,7 @@ use rustc_demangle::demangle;
 use tracing::{debug, info};
 
 use crate::{
-    general_assembly::{self, GAError},
+    general_assembly::{self, state::GAState, GAError},
     smt::DContext,
     util::{ErrorReason, ExpressionType, LineTrace, PathStatus, Variable, VisualPathResult},
     vm,
@@ -101,11 +101,13 @@ fn run_elf_paths(vm: &mut general_assembly::vm::VM) -> Result<(), GAError> {
             general_assembly::executor::PathResult::Suppress => todo!(),
         };
 
+        let symbolics = elf_get_values(state.marked_symbolic.iter(), &state)?;
+
         let result = VisualPathResult {
             path: path_num,
             result: v_path_result,
             inputs: vec![],
-            symbolics: vec![],
+            symbolics,
         };
         println!("{}", result);
     }
@@ -262,6 +264,24 @@ fn create_error_reason(state: &mut vm::LLVMState, error: vm::AnalysisError) -> E
         error_location,
         stack_trace,
     }
+}
+
+fn elf_get_values<'a, I>(vars: I, state: &GAState) -> Result<Vec<Variable>, GAError>
+where
+    I: Iterator<Item = &'a Variable>,
+{
+    let mut results = Vec::new();
+    for var in vars {
+        let constant = state.constraints.get_value(&var.value)?;
+        let var = Variable {
+            name: var.name.clone(),
+            value: constant,
+            ty: var.ty.clone(),
+        };
+        results.push(var);
+    }
+
+    Ok(results)
 }
 
 fn get_values<'a, I>(vars: I, state: &vm::LLVMState) -> Result<Vec<Variable>, vm::LLVMExecutorError>

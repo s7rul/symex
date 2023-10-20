@@ -7,10 +7,11 @@ use tracing::{debug, trace};
 use crate::{
     general_assembly::path_selection::Path,
     smt::{DContext, DExpr, SolverError},
+    util::{ExpressionType, Variable},
 };
 
 use super::{
-    instruction::{Condition, Instruction, Operand},
+    instruction::{Condition, Instruction, Operand, Operation},
     project::Project,
     state::GAState,
     vm::VM,
@@ -123,6 +124,11 @@ impl<'vm> GAExecutor<'vm> {
                         .state
                         .ctx
                         .unconstrained(self.project.get_word_size(), name);
+                    self.state.marked_symbolic.push(Variable {
+                        name: Some(name.to_owned()),
+                        value: value.clone(),
+                        ty: ExpressionType::Integer(self.project.get_word_size() as usize),
+                    });
                     self.state.set_register(name.to_owned(), value.clone());
                     value
                 }
@@ -174,175 +180,201 @@ impl<'vm> GAExecutor<'vm> {
 
         // initiate local variable storage
         let mut local: HashMap<String, DExpr> = HashMap::new();
-
         for operation in &i.operations {
-            trace!("Executing operation: {:?}", operation);
-            match operation {
-                crate::general_assembly::instruction::Operation::Nop => (), // nop so do nothig
-                crate::general_assembly::instruction::Operation::Move {
-                    destination,
-                    source,
-                } => {
-                    let value = self.get_operand_value(source, &mut local);
-                    self.set_operand_value(destination, value, &mut local);
-                }
-                crate::general_assembly::instruction::Operation::Add {
-                    destination,
-                    operand1,
-                    operand2,
-                } => {
-                    let op1 = self.get_operand_value(operand1, &local);
-                    let op2 = self.get_operand_value(operand2, &local);
-                    let result = op1.add(&op2);
-                    self.set_operand_value(destination, result, &mut local);
-                }
-                crate::general_assembly::instruction::Operation::Sub {
-                    destination,
-                    operand1,
-                    operand2,
-                } => {
-                    let op1 = self.get_operand_value(operand1, &local);
-                    let op2 = self.get_operand_value(operand2, &local);
-                    let result = op1.sub(&op2);
-                    self.set_operand_value(destination, result, &mut local);
-                }
-                crate::general_assembly::instruction::Operation::And {
-                    destination,
-                    operand1,
-                    operand2,
-                } => {
-                    let op1 = self.get_operand_value(operand1, &local);
-                    let op2 = self.get_operand_value(operand2, &local);
-                    let result = op1.sub(&op2);
-                    self.set_operand_value(destination, result, &mut local);
-                }
-                crate::general_assembly::instruction::Operation::Or {
-                    destination,
-                    operand1,
-                    operand2,
-                } => todo!(),
-                crate::general_assembly::instruction::Operation::Xor {
-                    destination,
-                    operand1,
-                    operand2,
-                } => todo!(),
-                crate::general_assembly::instruction::Operation::Sl {
-                    destination,
-                    operand,
-                    shift,
-                } => {
-                    let value = self.get_operand_value(operand, &local);
-                    let shift_amount = self.get_operand_value(shift, &local);
-                    let result = value.sll(&shift_amount);
-                    self.set_operand_value(destination, result, &mut local);
-                }
-                crate::general_assembly::instruction::Operation::Srl {
-                    destination,
-                    operand,
-                    shift,
-                } => {
-                    let value = self.get_operand_value(operand, &local);
-                    let shift_amount = self.get_operand_value(shift, &local);
-                    let result = value.srl(&shift_amount);
-                    self.set_operand_value(destination, result, &mut local);
-                }
-                crate::general_assembly::instruction::Operation::Sra {
-                    destination,
-                    operand,
-                    shift,
-                } => todo!(),
-                crate::general_assembly::instruction::Operation::Jump { destination } => todo!(),
-                crate::general_assembly::instruction::Operation::ConditionalJump {
-                    destination,
-                    condition,
-                } => {
-                    let c = self.state.get_expr(condition)?.simplify();
+            self.executer_operation(operation, &mut local);
+        }
 
-                    // if constant just jump
-                    if let Some(constant_c) = c.get_constant_bool() {
-                        if constant_c {
-                            let destination = self.get_operand_value(destination, &local);
-                            self.state.set_register("PC".to_owned(), destination);
-                        }
-                        return Ok(());
+        Ok(())
+    }
+
+    fn executer_operation(
+        &mut self,
+        operation: &Operation,
+        local: &mut HashMap<String, DExpr>,
+    ) -> Result<()> {
+        trace!("Executing operation: {:?}", operation);
+        match operation {
+            crate::general_assembly::instruction::Operation::Nop => (), // nop so do nothig
+            crate::general_assembly::instruction::Operation::Move {
+                destination,
+                source,
+            } => {
+                let value = self.get_operand_value(source, local);
+                self.set_operand_value(destination, value, local);
+            }
+            crate::general_assembly::instruction::Operation::Add {
+                destination,
+                operand1,
+                operand2,
+            } => {
+                let op1 = self.get_operand_value(operand1, &local);
+                let op2 = self.get_operand_value(operand2, &local);
+                let result = op1.add(&op2);
+                self.set_operand_value(destination, result, local);
+            }
+            crate::general_assembly::instruction::Operation::Sub {
+                destination,
+                operand1,
+                operand2,
+            } => {
+                let op1 = self.get_operand_value(operand1, &local);
+                let op2 = self.get_operand_value(operand2, &local);
+                let result = op1.sub(&op2);
+                self.set_operand_value(destination, result, local);
+            }
+            crate::general_assembly::instruction::Operation::And {
+                destination,
+                operand1,
+                operand2,
+            } => {
+                let op1 = self.get_operand_value(operand1, &local);
+                let op2 = self.get_operand_value(operand2, &local);
+                let result = op1.and(&op2);
+                self.set_operand_value(destination, result, local);
+            }
+            crate::general_assembly::instruction::Operation::Or {
+                destination,
+                operand1,
+                operand2,
+            } => {
+                let op1 = self.get_operand_value(operand1, &local);
+                let op2 = self.get_operand_value(operand2, &local);
+                let result = op1.or(&op2);
+                self.set_operand_value(destination, result, local);
+            }
+            crate::general_assembly::instruction::Operation::Xor {
+                destination,
+                operand1,
+                operand2,
+            } => {
+                let op1 = self.get_operand_value(operand1, &local);
+                let op2 = self.get_operand_value(operand2, &local);
+                let result = op1.xor(&op2);
+                self.set_operand_value(destination, result, local);
+            }
+            crate::general_assembly::instruction::Operation::Sl {
+                destination,
+                operand,
+                shift,
+            } => {
+                let value = self.get_operand_value(operand, &local);
+                let shift_amount = self.get_operand_value(shift, &local);
+                let result = value.sll(&shift_amount);
+                self.set_operand_value(destination, result, local);
+            }
+            crate::general_assembly::instruction::Operation::Srl {
+                destination,
+                operand,
+                shift,
+            } => {
+                let value = self.get_operand_value(operand, &local);
+                let shift_amount = self.get_operand_value(shift, &local);
+                let result = value.srl(&shift_amount);
+                self.set_operand_value(destination, result, local);
+            }
+            crate::general_assembly::instruction::Operation::Sra {
+                destination,
+                operand,
+                shift,
+            } => {
+                let value = self.get_operand_value(operand, &local);
+                let shift_amount = self.get_operand_value(shift, &local);
+                let result = value.sra(&shift_amount);
+                self.set_operand_value(destination, result, local);
+            }
+            crate::general_assembly::instruction::Operation::Jump { destination } => todo!(),
+            crate::general_assembly::instruction::Operation::ConditionalJump {
+                destination,
+                condition,
+            } => {
+                let c = self.state.get_expr(condition)?.simplify();
+
+                // if constant just jump
+                if let Some(constant_c) = c.get_constant_bool() {
+                    if constant_c {
+                        let destination = self.get_operand_value(destination, &local);
+                        self.state.set_register("PC".to_owned(), destination);
                     }
-
-                    let true_possible = self.state.constraints.is_sat_with_constraint(&c)?;
-                    let false_possible = self.state.constraints.is_sat_with_constraint(&c.not())?;
-
-                    let destination: DExpr = match (true_possible, false_possible) {
-                        (true, true) => {
-                            self.fork(c.not());
-                            self.state.constraints.assert(&c);
-                            Ok(self.get_operand_value(destination, &local))
-                        }
-                        (true, false) => Ok(self.get_operand_value(destination, &local)),
-                        (false, true) => Ok(self.state.get_register("PC".to_owned()).unwrap()), // safe to asume PC exist
-                        (false, false) => Err(SolverError::Unsat),
-                    }?;
-
-                    self.state.set_register("PC".to_owned(), destination);
+                    return Ok(());
                 }
-                crate::general_assembly::instruction::Operation::SetNFlag(operand) => {
-                    let value = self.get_operand_value(operand, &local);
-                    let shift = self
-                        .state
-                        .ctx
-                        .from_u64((self.project.get_word_size() - 1) as u64, 32);
-                    let result = value.srl(&shift).resize_unsigned(1);
-                    self.state.set_flag("N".to_owned(), result);
-                }
-                crate::general_assembly::instruction::Operation::SetZFlag(operand) => {
-                    let value = self.get_operand_value(operand, &local);
-                    let result = value._eq(&self.state.ctx.zero(self.project.get_word_size()));
-                    self.state.set_flag("Z".to_owned(), result);
-                }
-                crate::general_assembly::instruction::Operation::SetCFlag {
-                    operand1,
-                    operand2,
-                    sub,
-                } => {
-                    let op1 = self.get_operand_value(operand1, &local);
-                    let op2 = self.get_operand_value(operand2, &local);
 
-                    let result = if *sub {
-                        op1.usubo(&op2)
-                    } else {
-                        op1.uaddo(&op2)
-                    };
+                let true_possible = self.state.constraints.is_sat_with_constraint(&c)?;
+                let false_possible = self.state.constraints.is_sat_with_constraint(&c.not())?;
 
-                    self.state.set_flag("C".to_owned(), result);
-                }
-                crate::general_assembly::instruction::Operation::SetVFlag {
-                    operand1,
-                    operand2,
-                    sub,
-                } => {
-                    let op1 = self.get_operand_value(operand1, &local);
-                    let op2 = self.get_operand_value(operand2, &local);
+                let destination: DExpr = match (true_possible, false_possible) {
+                    (true, true) => {
+                        self.fork(c.not());
+                        self.state.constraints.assert(&c);
+                        Ok(self.get_operand_value(destination, &local))
+                    }
+                    (true, false) => Ok(self.get_operand_value(destination, &local)),
+                    (false, true) => Ok(self.state.get_register("PC".to_owned()).unwrap()), // safe to asume PC exist
+                    (false, false) => Err(SolverError::Unsat),
+                }?;
 
-                    let result = if *sub {
-                        op1.ssubo(&op2)
-                    } else {
-                        op1.saddo(&op2)
-                    };
+                self.state.set_register("PC".to_owned(), destination);
+            }
+            crate::general_assembly::instruction::Operation::SetNFlag(operand) => {
+                let value = self.get_operand_value(operand, &local);
+                let shift = self
+                    .state
+                    .ctx
+                    .from_u64((self.project.get_word_size() - 1) as u64, 32);
+                let result = value.srl(&shift).resize_unsigned(1);
+                self.state.set_flag("N".to_owned(), result);
+            }
+            crate::general_assembly::instruction::Operation::SetZFlag(operand) => {
+                let value = self.get_operand_value(operand, &local);
+                let result = value._eq(&self.state.ctx.zero(self.project.get_word_size()));
+                self.state.set_flag("Z".to_owned(), result);
+            }
+            crate::general_assembly::instruction::Operation::SetCFlag {
+                operand1,
+                operand2,
+                sub,
+            } => {
+                let op1 = self.get_operand_value(operand1, &local);
+                let op2 = self.get_operand_value(operand2, &local);
 
-                    self.state.set_flag("C".to_owned(), result);
-                }
-                crate::general_assembly::instruction::Operation::ForEach {
-                    operands,
-                    operations,
-                } => todo!(),
-                crate::general_assembly::instruction::Operation::ZeroExtend {
-                    destination,
-                    operand,
-                    bits,
-                } => {
-                    let op = self.get_operand_value(operand, &local);
-                    let valid_bits = op.resize_unsigned(*bits);
-                    let result = valid_bits.zero_ext(self.project.get_word_size());
-                    self.set_operand_value(destination, result, &mut local);
-                }
+                let result = if *sub {
+                    op1.usubo(&op2)
+                } else {
+                    op1.uaddo(&op2)
+                };
+
+                self.state.set_flag("C".to_owned(), result);
+            }
+            crate::general_assembly::instruction::Operation::SetVFlag {
+                operand1,
+                operand2,
+                sub,
+            } => {
+                let op1 = self.get_operand_value(operand1, &local);
+                let op2 = self.get_operand_value(operand2, &local);
+
+                let result = if *sub {
+                    op1.ssubo(&op2)
+                } else {
+                    op1.saddo(&op2)
+                };
+
+                self.state.set_flag("C".to_owned(), result);
+            }
+            crate::general_assembly::instruction::Operation::ForEach {
+                operands,
+                operations,
+            } => {
+                todo!()
+            }
+            crate::general_assembly::instruction::Operation::ZeroExtend {
+                destination,
+                operand,
+                bits,
+            } => {
+                let op = self.get_operand_value(operand, &local);
+                let valid_bits = op.resize_unsigned(*bits);
+                let result = valid_bits.zero_ext(self.project.get_word_size());
+                self.set_operand_value(destination, result, local);
             }
         }
         Ok(())
