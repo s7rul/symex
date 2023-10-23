@@ -5,7 +5,7 @@ use std::{collections::HashMap, rc::Rc};
 use tracing::debug;
 
 use crate::{
-    general_assembly::{GAError, Result},
+    general_assembly::{project::ProjectError, GAError, Result},
     memory::{MemoryError, ObjectMemory},
     smt::{DContext, DExpr, DSolver},
     util::Variable,
@@ -41,13 +41,24 @@ impl GAState {
             Some(a) => a,
             None => return Err(GAError::EntryFunctionNotFound(function.to_owned())),
         };
-        debug!("Found function.");
+        debug!("Found function at addr: {:#X}.", pc_reg);
         let ptr_size = project.get_ptr_size();
+
+        let sp_reg = match project.get_symbol_address("_stack_start") {
+            Some(a) => Ok(a),
+            None => Err(ProjectError::UnableToParseElf(
+                "start of stack not found".to_owned(),
+            )),
+        }?;
+        debug!("Found stack start at addr: {:#X}.", sp_reg);
 
         let memory = ObjectMemory::new(ctx, ptr_size, constraints.clone());
         let mut registers = HashMap::new();
         let pc_expr = ctx.from_u64(pc_reg, ptr_size);
         registers.insert("PC".to_owned(), pc_expr);
+
+        let sp_expr = ctx.from_u64(sp_reg, ptr_size);
+        registers.insert("SP".to_owned(), sp_expr);
 
         // set the link register to max value to detect when returning from a function
         let end_pc_expr = ctx.unsigned_max(ptr_size);
