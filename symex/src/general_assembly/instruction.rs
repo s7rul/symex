@@ -93,9 +93,6 @@ pub enum Operation {
         bits: u32,
     },
 
-    /// Unconditional jump
-    Jump { destination: Operand },
-
     /// Conditional jump
     ConditionalJump {
         destination: Operand,
@@ -156,11 +153,12 @@ pub enum Condition {
 pub enum Operand {
     Register(String),
     Immidiate(DataWord),
-    AddressInLocal(String),
-    Address(DataWord),
+    AddressInLocal(String, u32),
+    Address(DataWord, u32),
     AddressWithOffset {
         address: DataWord,
         offset_reg: String,
+        width: u32,
     },
     Local(String),
 }

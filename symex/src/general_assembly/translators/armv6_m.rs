@@ -69,8 +69,8 @@ impl Translator for Instruction {
                         operand1: Operand::Local("PC".to_owned()),
                         operand2: Operand::Immidiate(DataWord::Word32(*imm)),
                     },
-                    GAOperation::Jump {
-                        destination: Operand::Local("newPC".to_owned()),
+                    GAOperation::Move {
+                        destination: Operand::Register("PC".to_owned()), source: Operand::Local("newPC".to_owned()),
                     },
                 ],
             },
@@ -187,7 +187,7 @@ impl Translator for Instruction {
                 for reg in reg_list {
                     // write register to memory
                     operations.push(GAOperation::Move {
-                        destination: Operand::AddressInLocal("Address".to_owned()),
+                        destination: Operand::AddressInLocal("Address".to_owned(), 32),
                         source: arm_register_to_ga_operand(reg),
                     });
                     // update address
@@ -225,7 +225,14 @@ impl Translator for Instruction {
             Operation::STRHReg { m, n, t } => todo!(),
             Operation::SUBImm { imm, n, d } => todo!(),
             Operation::SUBReg { m, n, d } => todo!(),
-            Operation::SUBImmSP { imm } => todo!(),
+            Operation::SUBImmSP { imm } => GAInstruction {
+                instruction_size: 16,
+                operations: vec![GAOperation::Sub {
+                    destination: Operand::Register("SP".to_owned()),
+                    operand1: Operand::Register("SP".to_owned()),
+                    operand2: Operand::Immidiate(DataWord::Word32(*imm)),
+                }],
+            },
             Operation::SVC { imm } => todo!(),
             Operation::SXTB { m, d } => todo!(),
             Operation::SXTH { m, d } => todo!(),

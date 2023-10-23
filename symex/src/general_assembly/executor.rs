@@ -51,7 +51,6 @@ impl<'vm> GAExecutor<'vm> {
             trace!("executing instruction: {:?}", instruction);
             self.execute_instruction(&instruction)?;
         }
-        todo!()
     }
 
     pub fn fork(&mut self, constraint: DExpr) -> Result<()> {
@@ -114,10 +113,44 @@ impl<'vm> GAExecutor<'vm> {
         }
     }
 
-    fn get_operand_value(&mut self, operand: &Operand, local: &HashMap<String, DExpr>) -> DExpr {
+    fn get_memmory(&mut self, address: &DExpr, bits: u32) -> Result<DExpr> {
+        match address.get_constant() {
+            Some(const_addr) => {
+                if self.project.address_in_range(const_addr) {
+                    Err(super::GAError::WritingToStaticMemoryProhibited)
+                } else {
+                    let data = self.state.memory.read(address, bits)?;
+                    Ok(data)
+                }
+            }
+            None => todo!(),
+        }
+    }
+
+    fn set_memmory(&mut self, data: DExpr, address: &DExpr, bits: u32) -> Result<()> {
+        match address.get_constant() {
+            Some(const_addr) => {
+                if self.project.address_in_range(const_addr) {
+                    Err(super::GAError::WritingToStaticMemoryProhibited)
+                } else {
+                    self.state
+                        .memory
+                        .write(address, data.resize_unsigned(bits))?;
+                    Ok(())
+                }
+            }
+            None => todo!(),
+        }
+    }
+
+    fn get_operand_value(
+        &mut self,
+        operand: &Operand,
+        local: &HashMap<String, DExpr>,
+    ) -> Result<DExpr> {
         match operand {
             Operand::Register(name) => match self.state.get_register(name.to_owned()) {
-                Some(v) => v,
+                Some(v) => Ok(v),
                 None => {
                     // If register not writen to asume it can be any value
                     let value = self
@@ -130,17 +163,25 @@ impl<'vm> GAExecutor<'vm> {
                         ty: ExpressionType::Integer(self.project.get_word_size() as usize),
                     });
                     self.state.set_register(name.to_owned(), value.clone());
-                    value
+                    Ok(value)
                 }
             },
-            Operand::Immidiate(v) => self.get_dexpr_from_dataword(v.to_owned()),
-            Operand::Address(_) => todo!(),
+            Operand::Immidiate(v) => Ok(self.get_dexpr_from_dataword(v.to_owned())),
+            Operand::Address(address, width) => {
+                let address = &self.get_dexpr_from_dataword(*address);
+                self.get_memmory(address, *width)
+            }
             Operand::AddressWithOffset {
                 address,
                 offset_reg,
+                width,
             } => todo!(),
-            Operand::Local(k) => (local.get(k).unwrap()).to_owned(),
-            Operand::AddressInLocal(_) => todo!(),
+            Operand::Local(k) => Ok((local.get(k).unwrap()).to_owned()),
+            Operand::AddressInLocal(local_name, width) => {
+                let address =
+                    self.get_operand_value(&Operand::Local(local_name.to_owned()), local)?;
+                self.get_memmory(&address, *width)
+            }
         }
     }
 
@@ -149,20 +190,29 @@ impl<'vm> GAExecutor<'vm> {
         operand: &Operand,
         value: DExpr,
         local: &mut HashMap<String, DExpr>,
-    ) {
+    ) -> Result<()> {
         match operand {
             Operand::Register(v) => self.state.set_register(v.to_owned(), value),
             Operand::Immidiate(_) => panic!(), // not prohibited change to error later
-            Operand::AddressInLocal(_) => todo!(),
-            Operand::Address(_) => todo!(),
+            Operand::AddressInLocal(local_name, width) => {
+                let address =
+                    self.get_operand_value(&Operand::Local(local_name.to_owned()), local)?;
+                self.set_memmory(value, &address, *width)?;
+            }
+            Operand::Address(address, width) => {
+                let address = self.get_dexpr_from_dataword(*address);
+                self.set_memmory(value, &address, *width)?;
+            }
             Operand::AddressWithOffset {
                 address,
                 offset_reg,
+                width,
             } => todo!(),
             Operand::Local(k) => {
                 local.insert(k.to_owned(), value);
             }
         }
+        Ok(())
     }
 
     fn execute_instruction(&mut self, i: &Instruction) -> Result<()> {
@@ -199,7 +249,7 @@ impl<'vm> GAExecutor<'vm> {
                 destination,
                 source,
             } => {
-                let value = self.get_operand_value(source, local);
+                let value = self.get_operand_value(source, local)?;
                 self.set_operand_value(destination, value, local);
             }
             crate::general_assembly::instruction::Operation::Add {
@@ -207,8 +257,8 @@ impl<'vm> GAExecutor<'vm> {
                 operand1,
                 operand2,
             } => {
-                let op1 = self.get_operand_value(operand1, &local);
-                let op2 = self.get_operand_value(operand2, &local);
+                let op1 = self.get_operand_value(operand1, &local)?;
+                let op2 = self.get_operand_value(operand2, &local)?;
                 let result = op1.add(&op2);
                 self.set_operand_value(destination, result, local);
             }
@@ -217,8 +267,8 @@ impl<'vm> GAExecutor<'vm> {
                 operand1,
                 operand2,
             } => {
-                let op1 = self.get_operand_value(operand1, &local);
-                let op2 = self.get_operand_value(operand2, &local);
+                let op1 = self.get_operand_value(operand1, &local)?;
+                let op2 = self.get_operand_value(operand2, &local)?;
                 let result = op1.sub(&op2);
                 self.set_operand_value(destination, result, local);
             }
@@ -227,8 +277,8 @@ impl<'vm> GAExecutor<'vm> {
                 operand1,
                 operand2,
             } => {
-                let op1 = self.get_operand_value(operand1, &local);
-                let op2 = self.get_operand_value(operand2, &local);
+                let op1 = self.get_operand_value(operand1, &local)?;
+                let op2 = self.get_operand_value(operand2, &local)?;
                 let result = op1.and(&op2);
                 self.set_operand_value(destination, result, local);
             }
@@ -237,8 +287,8 @@ impl<'vm> GAExecutor<'vm> {
                 operand1,
                 operand2,
             } => {
-                let op1 = self.get_operand_value(operand1, &local);
-                let op2 = self.get_operand_value(operand2, &local);
+                let op1 = self.get_operand_value(operand1, &local)?;
+                let op2 = self.get_operand_value(operand2, &local)?;
                 let result = op1.or(&op2);
                 self.set_operand_value(destination, result, local);
             }
@@ -247,8 +297,8 @@ impl<'vm> GAExecutor<'vm> {
                 operand1,
                 operand2,
             } => {
-                let op1 = self.get_operand_value(operand1, &local);
-                let op2 = self.get_operand_value(operand2, &local);
+                let op1 = self.get_operand_value(operand1, &local)?;
+                let op2 = self.get_operand_value(operand2, &local)?;
                 let result = op1.xor(&op2);
                 self.set_operand_value(destination, result, local);
             }
@@ -257,8 +307,8 @@ impl<'vm> GAExecutor<'vm> {
                 operand,
                 shift,
             } => {
-                let value = self.get_operand_value(operand, &local);
-                let shift_amount = self.get_operand_value(shift, &local);
+                let value = self.get_operand_value(operand, &local)?;
+                let shift_amount = self.get_operand_value(shift, &local)?;
                 let result = value.sll(&shift_amount);
                 self.set_operand_value(destination, result, local);
             }
@@ -267,8 +317,8 @@ impl<'vm> GAExecutor<'vm> {
                 operand,
                 shift,
             } => {
-                let value = self.get_operand_value(operand, &local);
-                let shift_amount = self.get_operand_value(shift, &local);
+                let value = self.get_operand_value(operand, &local)?;
+                let shift_amount = self.get_operand_value(shift, &local)?;
                 let result = value.srl(&shift_amount);
                 self.set_operand_value(destination, result, local);
             }
@@ -277,12 +327,11 @@ impl<'vm> GAExecutor<'vm> {
                 operand,
                 shift,
             } => {
-                let value = self.get_operand_value(operand, &local);
-                let shift_amount = self.get_operand_value(shift, &local);
+                let value = self.get_operand_value(operand, &local)?;
+                let shift_amount = self.get_operand_value(shift, &local)?;
                 let result = value.sra(&shift_amount);
                 self.set_operand_value(destination, result, local);
             }
-            crate::general_assembly::instruction::Operation::Jump { destination } => todo!(),
             crate::general_assembly::instruction::Operation::ConditionalJump {
                 destination,
                 condition,
@@ -292,7 +341,7 @@ impl<'vm> GAExecutor<'vm> {
                 // if constant just jump
                 if let Some(constant_c) = c.get_constant_bool() {
                     if constant_c {
-                        let destination = self.get_operand_value(destination, &local);
+                        let destination = self.get_operand_value(destination, &local)?;
                         self.state.set_register("PC".to_owned(), destination);
                     }
                     return Ok(());
@@ -305,9 +354,9 @@ impl<'vm> GAExecutor<'vm> {
                     (true, true) => {
                         self.fork(c.not());
                         self.state.constraints.assert(&c);
-                        Ok(self.get_operand_value(destination, &local))
+                        Ok(self.get_operand_value(destination, &local)?)
                     }
-                    (true, false) => Ok(self.get_operand_value(destination, &local)),
+                    (true, false) => Ok(self.get_operand_value(destination, &local)?),
                     (false, true) => Ok(self.state.get_register("PC".to_owned()).unwrap()), // safe to asume PC exist
                     (false, false) => Err(SolverError::Unsat),
                 }?;
@@ -315,7 +364,7 @@ impl<'vm> GAExecutor<'vm> {
                 self.state.set_register("PC".to_owned(), destination);
             }
             crate::general_assembly::instruction::Operation::SetNFlag(operand) => {
-                let value = self.get_operand_value(operand, &local);
+                let value = self.get_operand_value(operand, &local)?;
                 let shift = self
                     .state
                     .ctx
@@ -324,7 +373,7 @@ impl<'vm> GAExecutor<'vm> {
                 self.state.set_flag("N".to_owned(), result);
             }
             crate::general_assembly::instruction::Operation::SetZFlag(operand) => {
-                let value = self.get_operand_value(operand, &local);
+                let value = self.get_operand_value(operand, &local)?;
                 let result = value._eq(&self.state.ctx.zero(self.project.get_word_size()));
                 self.state.set_flag("Z".to_owned(), result);
             }
@@ -333,8 +382,8 @@ impl<'vm> GAExecutor<'vm> {
                 operand2,
                 sub,
             } => {
-                let op1 = self.get_operand_value(operand1, &local);
-                let op2 = self.get_operand_value(operand2, &local);
+                let op1 = self.get_operand_value(operand1, &local)?;
+                let op2 = self.get_operand_value(operand2, &local)?;
 
                 let result = if *sub {
                     op1.usubo(&op2)
@@ -349,8 +398,8 @@ impl<'vm> GAExecutor<'vm> {
                 operand2,
                 sub,
             } => {
-                let op1 = self.get_operand_value(operand1, &local);
-                let op2 = self.get_operand_value(operand2, &local);
+                let op1 = self.get_operand_value(operand1, &local)?;
+                let op2 = self.get_operand_value(operand2, &local)?;
 
                 let result = if *sub {
                     op1.ssubo(&op2)
@@ -371,7 +420,7 @@ impl<'vm> GAExecutor<'vm> {
                 operand,
                 bits,
             } => {
-                let op = self.get_operand_value(operand, &local);
+                let op = self.get_operand_value(operand, &local)?;
                 let valid_bits = op.resize_unsigned(*bits);
                 let result = valid_bits.zero_ext(self.project.get_word_size());
                 self.set_operand_value(destination, result, local);

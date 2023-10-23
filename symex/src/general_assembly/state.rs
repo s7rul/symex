@@ -6,7 +6,7 @@ use tracing::debug;
 
 use crate::{
     general_assembly::{project::ProjectError, GAError, Result},
-    memory::{MemoryError, ObjectMemory},
+    memory::{ArrayMemory, MemoryError, ObjectMemory},
     smt::{DContext, DExpr, DSolver},
     util::Variable,
 };
@@ -22,7 +22,7 @@ pub struct GAState {
     pub ctx: &'static DContext,
     pub constraints: DSolver,
     pub marked_symbolic: Vec<Variable>,
-    pub memory: ObjectMemory,
+    pub memory: ArrayMemory,
     pub cycle_count: u128,
     pub registers: HashMap<String, DExpr>,
     pc_register: u64, // this register is special
@@ -52,7 +52,7 @@ impl GAState {
         }?;
         debug!("Found stack start at addr: {:#X}.", sp_reg);
 
-        let memory = ObjectMemory::new(ctx, ptr_size, constraints.clone());
+        let memory = ArrayMemory::new(ctx, ptr_size);
         let mut registers = HashMap::new();
         let pc_expr = ctx.from_u64(pc_reg, ptr_size);
         registers.insert("PC".to_owned(), pc_expr);

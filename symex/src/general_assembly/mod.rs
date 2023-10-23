@@ -47,6 +47,17 @@ pub enum DataWord {
     Word8(u8),
 }
 
+impl Into<u64> for DataWord {
+    fn into(self) -> u64 {
+        match self {
+            DataWord::Word64(v) => v as u64,
+            DataWord::Word32(v) => v as u64,
+            DataWord::Word16(v) => v as u64,
+            DataWord::Word8(v) => v as u64,
+        }
+    }
+}
+
 #[derive(Debug, Clone, Copy)]
 pub enum RawDataWord {
     Word64([u8; 8]),
