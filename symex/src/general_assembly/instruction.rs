@@ -44,6 +44,14 @@ pub enum Operation {
         operand2: Operand,
     },
 
+    /// Multiply
+    /// destination = operand1 * operand2
+    Mul {
+        destination: Operand,
+        operand1: Operand,
+        operand2: Operand,
+    },
+
     /// And
     /// destination = operand1 & operand2
     And {

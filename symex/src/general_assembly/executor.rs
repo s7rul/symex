@@ -240,7 +240,11 @@ impl<'vm> GAExecutor<'vm> {
         let result = op1.add(&op2);
         let carry = op1.uaddo(&op2);
         let overflow = carry_in.xor(&carry);
-        AddWithCarryResult { carry_out: carry, overflow, result }
+        AddWithCarryResult {
+            carry_out: carry,
+            overflow,
+            result,
+        }
     }
 
     fn execute_instruction(&mut self, i: &Instruction) -> Result<()> {
@@ -259,7 +263,7 @@ impl<'vm> GAExecutor<'vm> {
         // initiate local variable storage
         let mut local: HashMap<String, DExpr> = HashMap::new();
         for operation in &i.operations {
-            self.executer_operation(operation, &mut local);
+            self.executer_operation(operation, &mut local)?;
         }
 
         Ok(())
@@ -278,7 +282,7 @@ impl<'vm> GAExecutor<'vm> {
                 source,
             } => {
                 let value = self.get_operand_value(source, local)?;
-                self.set_operand_value(destination, value, local);
+                self.set_operand_value(destination, value, local)?;
             }
             Operation::Add {
                 destination,
@@ -288,7 +292,7 @@ impl<'vm> GAExecutor<'vm> {
                 let op1 = self.get_operand_value(operand1, &local)?;
                 let op2 = self.get_operand_value(operand2, &local)?;
                 let result = op1.add(&op2);
-                self.set_operand_value(destination, result, local);
+                self.set_operand_value(destination, result, local)?;
             }
             Operation::Sub {
                 destination,
@@ -298,7 +302,13 @@ impl<'vm> GAExecutor<'vm> {
                 let op1 = self.get_operand_value(operand1, &local)?;
                 let op2 = self.get_operand_value(operand2, &local)?;
                 let result = op1.sub(&op2);
-                self.set_operand_value(destination, result, local);
+                self.set_operand_value(destination, result, local)?;
+            }
+            Operation::Mul { destination, operand1, operand2 } => {
+                let op1 = self.get_operand_value(operand1, &local)?;
+                let op2 = self.get_operand_value(operand2, &local)?;
+                let result = op1.mul(&op2);
+                self.set_operand_value(destination, result, local)?;
             }
             Operation::And {
                 destination,
@@ -308,7 +318,7 @@ impl<'vm> GAExecutor<'vm> {
                 let op1 = self.get_operand_value(operand1, &local)?;
                 let op2 = self.get_operand_value(operand2, &local)?;
                 let result = op1.and(&op2);
-                self.set_operand_value(destination, result, local);
+                self.set_operand_value(destination, result, local)?;
             }
             Operation::Or {
                 destination,
@@ -318,7 +328,7 @@ impl<'vm> GAExecutor<'vm> {
                 let op1 = self.get_operand_value(operand1, &local)?;
                 let op2 = self.get_operand_value(operand2, &local)?;
                 let result = op1.or(&op2);
-                self.set_operand_value(destination, result, local);
+                self.set_operand_value(destination, result, local)?;
             }
             Operation::Xor {
                 destination,
@@ -328,7 +338,7 @@ impl<'vm> GAExecutor<'vm> {
                 let op1 = self.get_operand_value(operand1, &local)?;
                 let op2 = self.get_operand_value(operand2, &local)?;
                 let result = op1.xor(&op2);
-                self.set_operand_value(destination, result, local);
+                self.set_operand_value(destination, result, local)?;
             }
             Operation::Not {
                 destination,
@@ -337,7 +347,7 @@ impl<'vm> GAExecutor<'vm> {
                 let op = self.get_operand_value(operand, local)?;
 
                 let result = op.not();
-                self.set_operand_value(destination, result, local);
+                self.set_operand_value(destination, result, local)?;
             }
             Operation::Sl {
                 destination,
@@ -347,7 +357,7 @@ impl<'vm> GAExecutor<'vm> {
                 let value = self.get_operand_value(operand, &local)?;
                 let shift_amount = self.get_operand_value(shift, &local)?;
                 let result = value.sll(&shift_amount);
-                self.set_operand_value(destination, result, local);
+                self.set_operand_value(destination, result, local)?;
             }
             Operation::Srl {
                 destination,
@@ -357,7 +367,7 @@ impl<'vm> GAExecutor<'vm> {
                 let value = self.get_operand_value(operand, &local)?;
                 let shift_amount = self.get_operand_value(shift, &local)?;
                 let result = value.srl(&shift_amount);
-                self.set_operand_value(destination, result, local);
+                self.set_operand_value(destination, result, local)?;
             }
             Operation::Sra {
                 destination,
@@ -367,7 +377,7 @@ impl<'vm> GAExecutor<'vm> {
                 let value = self.get_operand_value(operand, &local)?;
                 let shift_amount = self.get_operand_value(shift, &local)?;
                 let result = value.sra(&shift_amount);
-                self.set_operand_value(destination, result, local);
+                self.set_operand_value(destination, result, local)?;
             }
             Operation::ConditionalJump {
                 destination,
@@ -436,12 +446,12 @@ impl<'vm> GAExecutor<'vm> {
                         let carry_in = self.state.get_flag("C".to_owned()).unwrap();
                         let op2 = op2.not().add(&one);
                         self.add_with_carry(&op1, &op2, &carry_in).carry_out
-                    },
+                    }
                     (true, false) => self.add_with_carry(&op1, &op2.not(), &one).carry_out,
                     (false, true) => {
                         let carry_in = self.state.get_flag("C".to_owned()).unwrap();
                         self.add_with_carry(&op1, &op2, &carry_in).carry_out
-                    },
+                    }
                     (false, false) => op1.uaddo(&op2),
                 };
 
@@ -462,12 +472,12 @@ impl<'vm> GAExecutor<'vm> {
                         let carry_in = self.state.get_flag("C".to_owned()).unwrap();
                         let op2 = op2.not().add(&one);
                         self.add_with_carry(&op1, &op2, &carry_in).overflow
-                    },
+                    }
                     (true, false) => self.add_with_carry(&op1, &op2.not(), &one).overflow,
                     (false, true) => {
                         let carry_in = self.state.get_flag("C".to_owned()).unwrap();
                         self.add_with_carry(&op1, &op2, &carry_in).overflow
-                    },
+                    }
                     (false, false) => op1.saddo(&op2),
                 };
 
@@ -487,7 +497,7 @@ impl<'vm> GAExecutor<'vm> {
                 let op = self.get_operand_value(operand, &local)?;
                 let valid_bits = op.resize_unsigned(*bits);
                 let result = valid_bits.zero_ext(self.project.get_word_size());
-                self.set_operand_value(destination, result, local);
+                self.set_operand_value(destination, result, local)?;
             }
             Operation::SignExtend {
                 destination,
@@ -497,7 +507,7 @@ impl<'vm> GAExecutor<'vm> {
                 let op = self.get_operand_value(operand, &local)?;
                 let valid_bits = op.resize_unsigned(*bits);
                 let result = valid_bits.sign_ext(self.project.get_word_size());
-                self.set_operand_value(destination, result, local);
+                self.set_operand_value(destination, result, local)?;
             }
             Operation::Adc {
                 destination,
@@ -558,13 +568,4 @@ impl<'vm> GAExecutor<'vm> {
         }
         Ok(())
     }
-}
-
-#[test]
-fn boolector_test() {
-    let solver = DContext::new();
-    let overflow_result = solver.from_u64(0xf, 4).uaddo(&solver.from_u64(0x1, 4));
-    assert_eq!(overflow_result, solver.from_bool(true));
-    let overflow_result = solver.from_u64(0x1, 4).usubo(&solver.from_u64(0xf, 4));
-    assert_eq!(overflow_result, solver.from_bool(true));
 }
