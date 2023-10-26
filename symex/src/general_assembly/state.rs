@@ -2,7 +2,7 @@
 
 use std::{collections::HashMap, rc::Rc};
 
-use tracing::debug;
+use tracing::{debug, trace};
 
 use crate::{
     general_assembly::{project::ProjectError, GAError, Result},
@@ -28,6 +28,7 @@ pub struct GAState {
     pc_register: u64, // this register is special
     flags: HashMap<String, DExpr>,
     end_pc: u64,
+    pc_writen_to: bool,
 }
 
 impl GAState {
@@ -82,6 +83,7 @@ impl GAState {
             pc_register: pc_reg,
             flags,
             end_pc,
+            pc_writen_to: true,
         })
     }
 
@@ -115,6 +117,7 @@ impl GAState {
     }
 
     pub fn set_flag(&mut self, flag: String, expr: DExpr) {
+        trace!("flag {} set to {:?}", flag, expr);
         self.flags.insert(flag, expr);
     }
 
@@ -135,14 +138,40 @@ impl GAState {
                 .get_flag("Z".to_owned())
                 .unwrap()
                 ._eq(&self.ctx.from_bool(false)),
-            Condition::CS => todo!(),
-            Condition::CC => todo!(),
+            Condition::CS => self
+                .get_flag("C".to_owned())
+                .unwrap()
+                ._eq(&self.ctx.from_bool(true)),
+            Condition::CC => self
+                .get_flag("C".to_owned())
+                .unwrap()
+                ._eq(&self.ctx.from_bool(false)),
             Condition::MI => todo!(),
             Condition::PL => todo!(),
             Condition::VS => todo!(),
             Condition::VC => todo!(),
-            Condition::HI => todo!(),
-            Condition::LS => todo!(),
+            Condition::HI => {
+                let c = self
+                    .get_flag("C".to_owned())
+                    .unwrap()
+                    ._eq(&self.ctx.from_bool(true));
+                let z = self
+                    .get_flag("Z".to_owned())
+                    .unwrap()
+                    ._eq(&self.ctx.from_bool(false));
+                c.and(&z)._eq(&self.ctx.from_bool(true))
+            }
+            Condition::LS => {
+                let c = self
+                    .get_flag("C".to_owned())
+                    .unwrap()
+                    ._eq(&self.ctx.from_bool(false));
+                let z = self
+                    .get_flag("Z".to_owned())
+                    .unwrap()
+                    ._eq(&self.ctx.from_bool(true));
+                c.or(&z)._eq(&self.ctx.from_bool(true))
+            }
             Condition::GE => todo!(),
             Condition::LT => todo!(),
             Condition::GT => todo!(),

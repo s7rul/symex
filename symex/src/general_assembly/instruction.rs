@@ -29,6 +29,13 @@ pub enum Operation {
         operand2: Operand,
     },
 
+    /// Add with carry
+    Adc {
+        destination: Operand,
+        operand1: Operand,
+        operand2: Operand,
+    },
+
     /// Subtracts
     /// destination = operand1 - operand2
     Sub {
@@ -59,6 +66,13 @@ pub enum Operation {
         destination: Operand,
         operand1: Operand,
         operand2: Operand,
+    },
+
+    /// Not
+    /// destination = !operand
+    Not {
+        destination: Operand,
+        operand: Operand,
     },
 
     /// Shift left
@@ -93,6 +107,13 @@ pub enum Operation {
         bits: u32,
     },
 
+    /// Sign extend
+    SignExtend {
+        destination: Operand,
+        operand: Operand,
+        bits: u32,
+    },
+
     /// Conditional jump
     ConditionalJump {
         destination: Operand,
@@ -110,13 +131,24 @@ pub enum Operation {
         operand1: Operand,
         operand2: Operand,
         sub: bool,
+        carry: bool,
     },
+
+    /// Set the carry flag based on a left shift
+    SetCFlagShiftLeft { operand: Operand, shift: Operand },
+
+    /// Set the carry flag based on a right shift logical
+    SetCFlagSrl { operand: Operand, shift: Operand },
+
+    /// Set the carry flag based on a right shift arithemtic
+    SetCFlagSra { operand: Operand, shift: Operand },
 
     /// Set overfolow flag
     SetVFlag {
         operand1: Operand,
         operand2: Operand,
         sub: bool,
+        carry: bool,
     },
 
     /// Do all the operations in operations for each operand.

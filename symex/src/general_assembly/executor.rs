@@ -31,6 +31,12 @@ pub enum PathResult {
     Suppress,
 }
 
+struct AddWithCarryResult {
+    carry_out: DExpr,
+    overflow: DExpr,
+    result: DExpr,
+}
+
 impl<'vm> GAExecutor<'vm> {
     pub fn from_state(state: GAState, vm: &'vm mut VM, project: &'static Project) -> Self {
         Self { vm, state, project }
@@ -114,6 +120,7 @@ impl<'vm> GAExecutor<'vm> {
     }
 
     fn get_memmory(&mut self, address: &DExpr, bits: u32) -> Result<DExpr> {
+        trace!("Getting memmory addr: {:?}", address);
         match address.get_constant() {
             Some(const_addr) => {
                 if self.project.address_in_range(const_addr) {
@@ -123,11 +130,15 @@ impl<'vm> GAExecutor<'vm> {
                     Ok(data)
                 }
             }
-            None => todo!(),
+            None => {
+                let data = self.state.memory.read(address, bits)?;
+                Ok(data)
+            }
         }
     }
 
     fn set_memmory(&mut self, data: DExpr, address: &DExpr, bits: u32) -> Result<()> {
+        trace!("Setting memmory addr: {:?}", address);
         match address.get_constant() {
             Some(const_addr) => {
                 if self.project.address_in_range(const_addr) {
@@ -139,7 +150,12 @@ impl<'vm> GAExecutor<'vm> {
                     Ok(())
                 }
             }
-            None => todo!(),
+            None => {
+                self.state
+                    .memory
+                    .write(address, data.resize_unsigned(bits))?;
+                Ok(())
+            }
         }
     }
 
@@ -192,7 +208,10 @@ impl<'vm> GAExecutor<'vm> {
         local: &mut HashMap<String, DExpr>,
     ) -> Result<()> {
         match operand {
-            Operand::Register(v) => self.state.set_register(v.to_owned(), value),
+            Operand::Register(v) => {
+                trace!("Setting register {} to {:?}", v, value);
+                self.state.set_register(v.to_owned(), value)
+            }
             Operand::Immidiate(_) => panic!(), // not prohibited change to error later
             Operand::AddressInLocal(local_name, width) => {
                 let address =
@@ -213,6 +232,15 @@ impl<'vm> GAExecutor<'vm> {
             }
         }
         Ok(())
+    }
+
+    fn add_with_carry(&mut self, op1: &DExpr, op2: &DExpr, carry_in: &DExpr) -> AddWithCarryResult {
+        let carry_in = carry_in.resize_unsigned(1);
+        let op2 = op2.add(&carry_in.zero_ext(self.project.get_word_size()));
+        let result = op1.add(&op2);
+        let carry = op1.uaddo(&op2);
+        let overflow = carry_in.xor(&carry);
+        AddWithCarryResult { carry_out: carry, overflow, result }
     }
 
     fn execute_instruction(&mut self, i: &Instruction) -> Result<()> {
@@ -244,15 +272,15 @@ impl<'vm> GAExecutor<'vm> {
     ) -> Result<()> {
         trace!("Executing operation: {:?}", operation);
         match operation {
-            crate::general_assembly::instruction::Operation::Nop => (), // nop so do nothig
-            crate::general_assembly::instruction::Operation::Move {
+            Operation::Nop => (), // nop so do nothig
+            Operation::Move {
                 destination,
                 source,
             } => {
                 let value = self.get_operand_value(source, local)?;
                 self.set_operand_value(destination, value, local);
             }
-            crate::general_assembly::instruction::Operation::Add {
+            Operation::Add {
                 destination,
                 operand1,
                 operand2,
@@ -262,7 +290,7 @@ impl<'vm> GAExecutor<'vm> {
                 let result = op1.add(&op2);
                 self.set_operand_value(destination, result, local);
             }
-            crate::general_assembly::instruction::Operation::Sub {
+            Operation::Sub {
                 destination,
                 operand1,
                 operand2,
@@ -272,7 +300,7 @@ impl<'vm> GAExecutor<'vm> {
                 let result = op1.sub(&op2);
                 self.set_operand_value(destination, result, local);
             }
-            crate::general_assembly::instruction::Operation::And {
+            Operation::And {
                 destination,
                 operand1,
                 operand2,
@@ -282,7 +310,7 @@ impl<'vm> GAExecutor<'vm> {
                 let result = op1.and(&op2);
                 self.set_operand_value(destination, result, local);
             }
-            crate::general_assembly::instruction::Operation::Or {
+            Operation::Or {
                 destination,
                 operand1,
                 operand2,
@@ -292,7 +320,7 @@ impl<'vm> GAExecutor<'vm> {
                 let result = op1.or(&op2);
                 self.set_operand_value(destination, result, local);
             }
-            crate::general_assembly::instruction::Operation::Xor {
+            Operation::Xor {
                 destination,
                 operand1,
                 operand2,
@@ -302,7 +330,16 @@ impl<'vm> GAExecutor<'vm> {
                 let result = op1.xor(&op2);
                 self.set_operand_value(destination, result, local);
             }
-            crate::general_assembly::instruction::Operation::Sl {
+            Operation::Not {
+                destination,
+                operand,
+            } => {
+                let op = self.get_operand_value(operand, local)?;
+
+                let result = op.not();
+                self.set_operand_value(destination, result, local);
+            }
+            Operation::Sl {
                 destination,
                 operand,
                 shift,
@@ -312,7 +349,7 @@ impl<'vm> GAExecutor<'vm> {
                 let result = value.sll(&shift_amount);
                 self.set_operand_value(destination, result, local);
             }
-            crate::general_assembly::instruction::Operation::Srl {
+            Operation::Srl {
                 destination,
                 operand,
                 shift,
@@ -322,7 +359,7 @@ impl<'vm> GAExecutor<'vm> {
                 let result = value.srl(&shift_amount);
                 self.set_operand_value(destination, result, local);
             }
-            crate::general_assembly::instruction::Operation::Sra {
+            Operation::Sra {
                 destination,
                 operand,
                 shift,
@@ -332,11 +369,12 @@ impl<'vm> GAExecutor<'vm> {
                 let result = value.sra(&shift_amount);
                 self.set_operand_value(destination, result, local);
             }
-            crate::general_assembly::instruction::Operation::ConditionalJump {
+            Operation::ConditionalJump {
                 destination,
                 condition,
             } => {
                 let c = self.state.get_expr(condition)?.simplify();
+                trace!("conditional expr: {:?}", c);
 
                 // if constant just jump
                 if let Some(constant_c) = c.get_constant_bool() {
@@ -349,10 +387,15 @@ impl<'vm> GAExecutor<'vm> {
 
                 let true_possible = self.state.constraints.is_sat_with_constraint(&c)?;
                 let false_possible = self.state.constraints.is_sat_with_constraint(&c.not())?;
+                trace!(
+                    "true possible: {} false possible: {}",
+                    true_possible,
+                    false_possible
+                );
 
                 let destination: DExpr = match (true_possible, false_possible) {
                     (true, true) => {
-                        self.fork(c.not());
+                        self.fork(c.not())?;
                         self.state.constraints.assert(&c);
                         Ok(self.get_operand_value(destination, &local)?)
                     }
@@ -363,7 +406,7 @@ impl<'vm> GAExecutor<'vm> {
 
                 self.state.set_register("PC".to_owned(), destination);
             }
-            crate::general_assembly::instruction::Operation::SetNFlag(operand) => {
+            Operation::SetNFlag(operand) => {
                 let value = self.get_operand_value(operand, &local)?;
                 let shift = self
                     .state
@@ -372,50 +415,71 @@ impl<'vm> GAExecutor<'vm> {
                 let result = value.srl(&shift).resize_unsigned(1);
                 self.state.set_flag("N".to_owned(), result);
             }
-            crate::general_assembly::instruction::Operation::SetZFlag(operand) => {
+            Operation::SetZFlag(operand) => {
                 let value = self.get_operand_value(operand, &local)?;
                 let result = value._eq(&self.state.ctx.zero(self.project.get_word_size()));
                 self.state.set_flag("Z".to_owned(), result);
             }
-            crate::general_assembly::instruction::Operation::SetCFlag {
+            Operation::SetCFlag {
                 operand1,
                 operand2,
                 sub,
+                carry,
             } => {
                 let op1 = self.get_operand_value(operand1, &local)?;
                 let op2 = self.get_operand_value(operand2, &local)?;
+                let one = self.state.ctx.from_u64(1, self.project.get_word_size());
+                // not correct todo fix
 
-                let result = if *sub {
-                    op1.usubo(&op2)
-                } else {
-                    op1.uaddo(&op2)
+                let result = match (sub, carry) {
+                    (true, true) => {
+                        let carry_in = self.state.get_flag("C".to_owned()).unwrap();
+                        let op2 = op2.not().add(&one);
+                        self.add_with_carry(&op1, &op2, &carry_in).carry_out
+                    },
+                    (true, false) => self.add_with_carry(&op1, &op2.not(), &one).carry_out,
+                    (false, true) => {
+                        let carry_in = self.state.get_flag("C".to_owned()).unwrap();
+                        self.add_with_carry(&op1, &op2, &carry_in).carry_out
+                    },
+                    (false, false) => op1.uaddo(&op2),
                 };
 
                 self.state.set_flag("C".to_owned(), result);
             }
-            crate::general_assembly::instruction::Operation::SetVFlag {
+            Operation::SetVFlag {
                 operand1,
                 operand2,
                 sub,
+                carry,
             } => {
                 let op1 = self.get_operand_value(operand1, &local)?;
                 let op2 = self.get_operand_value(operand2, &local)?;
+                let one = self.state.ctx.from_u64(1, self.project.get_word_size());
 
-                let result = if *sub {
-                    op1.ssubo(&op2)
-                } else {
-                    op1.saddo(&op2)
+                let result = match (sub, carry) {
+                    (true, true) => {
+                        let carry_in = self.state.get_flag("C".to_owned()).unwrap();
+                        let op2 = op2.not().add(&one);
+                        self.add_with_carry(&op1, &op2, &carry_in).overflow
+                    },
+                    (true, false) => self.add_with_carry(&op1, &op2.not(), &one).overflow,
+                    (false, true) => {
+                        let carry_in = self.state.get_flag("C".to_owned()).unwrap();
+                        self.add_with_carry(&op1, &op2, &carry_in).overflow
+                    },
+                    (false, false) => op1.saddo(&op2),
                 };
 
-                self.state.set_flag("C".to_owned(), result);
+                self.state.set_flag("V".to_owned(), result);
             }
-            crate::general_assembly::instruction::Operation::ForEach {
+            Operation::ForEach {
                 operands,
                 operations,
             } => {
                 todo!()
             }
-            crate::general_assembly::instruction::Operation::ZeroExtend {
+            Operation::ZeroExtend {
                 destination,
                 operand,
                 bits,
@@ -425,7 +489,82 @@ impl<'vm> GAExecutor<'vm> {
                 let result = valid_bits.zero_ext(self.project.get_word_size());
                 self.set_operand_value(destination, result, local);
             }
+            Operation::SignExtend {
+                destination,
+                operand,
+                bits,
+            } => {
+                let op = self.get_operand_value(operand, &local)?;
+                let valid_bits = op.resize_unsigned(*bits);
+                let result = valid_bits.sign_ext(self.project.get_word_size());
+                self.set_operand_value(destination, result, local);
+            }
+            Operation::Adc {
+                destination,
+                operand1,
+                operand2,
+            } => {
+                let op1 = self.get_operand_value(operand1, local)?;
+                let op2 = self.get_operand_value(operand2, local)?;
+                let carry = self
+                    .state
+                    .get_flag("C".to_owned())
+                    .unwrap()
+                    .zero_ext(self.project.get_word_size());
+                let result = op1.add(&op2).add(&carry);
+                self.set_operand_value(destination, result, local)?;
+            }
+            // These need to be tested are way to complex to be trusted
+            Operation::SetCFlagShiftLeft { operand, shift } => {
+                let op = self
+                    .get_operand_value(operand, local)?
+                    .zero_ext(1 + self.project.get_word_size());
+                let shift = self
+                    .get_operand_value(shift, local)?
+                    .zero_ext(1 + self.project.get_word_size());
+                let result = op.sll(&shift);
+                let carry = result
+                    .srl(&self.state.ctx.from_u64(
+                        self.project.get_word_size() as u64,
+                        self.project.get_word_size() + 1,
+                    ))
+                    .resize_unsigned(1);
+                self.state.set_flag("C".to_owned(), carry);
+            }
+            Operation::SetCFlagSrl { operand, shift } => {
+                let op = self
+                    .get_operand_value(operand, local)?
+                    .zero_ext(1 + self.project.get_word_size())
+                    .sll(&self.state.ctx.from_u64(1, 1 + self.project.get_word_size()));
+                let shift = self
+                    .get_operand_value(shift, local)?
+                    .zero_ext(1 + self.project.get_word_size());
+                let result = op.srl(&shift);
+                let carry = result.resize_unsigned(1);
+                self.state.set_flag("C".to_owned(), carry);
+            }
+            Operation::SetCFlagSra { operand, shift } => {
+                let op = self
+                    .get_operand_value(operand, local)?
+                    .zero_ext(1 + self.project.get_word_size())
+                    .sll(&self.state.ctx.from_u64(1, 1 + self.project.get_word_size()));
+                let shift = self
+                    .get_operand_value(shift, local)?
+                    .zero_ext(1 + self.project.get_word_size());
+                let result = op.sra(&shift);
+                let carry = result.resize_unsigned(1);
+                self.state.set_flag("C".to_owned(), carry);
+            }
         }
         Ok(())
     }
+}
+
+#[test]
+fn boolector_test() {
+    let solver = DContext::new();
+    let overflow_result = solver.from_u64(0xf, 4).uaddo(&solver.from_u64(0x1, 4));
+    assert_eq!(overflow_result, solver.from_bool(true));
+    let overflow_result = solver.from_u64(0x1, 4).usubo(&solver.from_u64(0xf, 4));
+    assert_eq!(overflow_result, solver.from_bool(true));
 }
