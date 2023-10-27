@@ -1,12 +1,12 @@
 //! Holds the state in general assembly execution.
 
-use std::{collections::HashMap, rc::Rc};
+use std::collections::HashMap;
 
 use tracing::{debug, trace};
 
 use crate::{
     general_assembly::{project::ProjectError, GAError, Result},
-    memory::{ArrayMemory, MemoryError, ObjectMemory},
+    memory::ArrayMemory,
     smt::{DContext, DExpr, DSolver},
     util::Variable,
 };
@@ -28,7 +28,6 @@ pub struct GAState {
     pc_register: u64, // this register is special
     flags: HashMap<String, DExpr>,
     end_pc: u64,
-    pc_writen_to: bool,
 }
 
 impl GAState {
@@ -83,7 +82,6 @@ impl GAState {
             pc_register: pc_reg,
             flags,
             end_pc,
-            pc_writen_to: true,
         })
     }
 

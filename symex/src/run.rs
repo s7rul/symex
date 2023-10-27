@@ -61,7 +61,7 @@ pub enum SolveFor {
 pub fn run_elf(
     path: &str,
     function: &str,
-    cfg: &RunConfig,
+    _cfg: &RunConfig,
 ) -> Result<Vec<VisualPathResult>, GAError> {
     let context = Box::new(DContext::new());
     let context = Box::leak(context);
@@ -82,7 +82,7 @@ type GAPathResult = general_assembly::executor::PathResult;
 fn run_elf_paths(vm: &mut general_assembly::vm::VM) -> Result<(), GAError> {
     let mut path_num = 0;
     let start = Instant::now();
-    while let Some((path_result, mut state)) = vm.run()? {
+    while let Some((path_result, state)) = vm.run()? {
         if matches!(path_result, GAPathResult::Suppress) {
             debug!("Suppressing path");
             continue;
@@ -95,7 +95,7 @@ fn run_elf_paths(vm: &mut general_assembly::vm::VM) -> Result<(), GAError> {
         path_num += 1;
 
         let v_path_result = match path_result {
-            general_assembly::executor::PathResult::Success(v) => PathStatus::Ok(None),
+            general_assembly::executor::PathResult::Success(_v) => PathStatus::Ok(None),
             general_assembly::executor::PathResult::Faliure => todo!(),
             general_assembly::executor::PathResult::AssumptionUnsat => todo!(),
             general_assembly::executor::PathResult::Suppress => todo!(),

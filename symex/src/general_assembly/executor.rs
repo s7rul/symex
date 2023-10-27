@@ -6,12 +6,12 @@ use tracing::{debug, trace};
 
 use crate::{
     general_assembly::path_selection::Path,
-    smt::{DContext, DExpr, SolverError},
+    smt::{DExpr, SolverError},
     util::{ExpressionType, Variable},
 };
 
 use super::{
-    instruction::{Condition, Instruction, Operand, Operation},
+    instruction::{Instruction, Operand, Operation},
     project::Project,
     state::GAState,
     vm::VM,
@@ -64,20 +64,6 @@ impl<'vm> GAExecutor<'vm> {
         let forked_state = self.state.clone();
         let path = Path::new(forked_state, Some(constraint));
 
-        self.vm.paths.save_path(path);
-        Ok(())
-    }
-
-    fn fork_and_jump(&mut self, new_pc: DExpr, constraint: Option<DExpr>) -> Result<()> {
-        trace!(
-            "Save backtracking path: constrint={:?}, new_pc={:?}",
-            constraint,
-            new_pc
-        );
-
-        let mut state = self.state.clone();
-        state.set_register("PC".to_owned(), new_pc);
-        let path = Path::new(state, constraint);
         self.vm.paths.save_path(path);
         Ok(())
     }
@@ -188,9 +174,9 @@ impl<'vm> GAExecutor<'vm> {
                 self.get_memmory(address, *width)
             }
             Operand::AddressWithOffset {
-                address,
-                offset_reg,
-                width,
+                address: _,
+                offset_reg: _,
+                width: _,
             } => todo!(),
             Operand::Local(k) => Ok((local.get(k).unwrap()).to_owned()),
             Operand::AddressInLocal(local_name, width) => {
@@ -223,9 +209,9 @@ impl<'vm> GAExecutor<'vm> {
                 self.set_memmory(value, &address, *width)?;
             }
             Operand::AddressWithOffset {
-                address,
-                offset_reg,
-                width,
+                address: _,
+                offset_reg: _,
+                width: _,
             } => todo!(),
             Operand::Local(k) => {
                 local.insert(k.to_owned(), value);
@@ -304,7 +290,11 @@ impl<'vm> GAExecutor<'vm> {
                 let result = op1.sub(&op2);
                 self.set_operand_value(destination, result, local)?;
             }
-            Operation::Mul { destination, operand1, operand2 } => {
+            Operation::Mul {
+                destination,
+                operand1,
+                operand2,
+            } => {
                 let op1 = self.get_operand_value(operand1, &local)?;
                 let op2 = self.get_operand_value(operand2, &local)?;
                 let result = op1.mul(&op2);
@@ -377,6 +367,20 @@ impl<'vm> GAExecutor<'vm> {
                 let value = self.get_operand_value(operand, &local)?;
                 let shift_amount = self.get_operand_value(shift, &local)?;
                 let result = value.sra(&shift_amount);
+                self.set_operand_value(destination, result, local)?;
+            }
+            Operation::Sror {
+                destination,
+                operand,
+                shift,
+            } => {
+                let word_size = self.state.ctx.from_u64(
+                    self.project.get_word_size() as u64,
+                    self.project.get_word_size(),
+                );
+                let value = self.get_operand_value(operand, &local)?;
+                let shift = self.get_operand_value(shift, &local)?;
+                let result = value.srl(&shift).or(&value.srl(&word_size).sub(&shift));
                 self.set_operand_value(destination, result, local)?;
             }
             Operation::ConditionalJump {
@@ -484,8 +488,8 @@ impl<'vm> GAExecutor<'vm> {
                 self.state.set_flag("V".to_owned(), result);
             }
             Operation::ForEach {
-                operands,
-                operations,
+                operands: _,
+                operations: _,
             } => {
                 todo!()
             }
@@ -521,7 +525,7 @@ impl<'vm> GAExecutor<'vm> {
                     .get_flag("C".to_owned())
                     .unwrap()
                     .zero_ext(self.project.get_word_size());
-                let result = op1.add(&op2).add(&carry);
+                let result = self.add_with_carry(&op1, &op2, &carry).result;
                 self.set_operand_value(destination, result, local)?;
             }
             // These need to be tested are way to complex to be trusted
@@ -564,6 +568,16 @@ impl<'vm> GAExecutor<'vm> {
                 let result = op.sra(&shift);
                 let carry = result.resize_unsigned(1);
                 self.state.set_flag("C".to_owned(), carry);
+            }
+            Operation::SetCFlagRor(result) => {
+                let result = self.get_operand_value(result, local)?;
+                let word_size_minus_one = self.state.ctx.from_u64(
+                    self.project.get_word_size() as u64 - 1,
+                    self.project.get_word_size(),
+                );
+                // result = srl(op, shift) OR sll(op, word_size - shift)
+                let c = result.srl(&word_size_minus_one).resize_unsigned(1);
+                self.state.set_flag("C".to_owned(), c);
             }
         }
         Ok(())

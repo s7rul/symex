@@ -6,10 +6,10 @@ use crate::{
 };
 
 use super::{
-    executor::{self, GAExecutor, PathResult},
+    executor::{GAExecutor, PathResult},
     path_selection::DFSPathSelection,
     project::Project,
-    Config, GAError, Result,
+    Result,
 };
 
 #[derive(Debug)]
@@ -26,7 +26,7 @@ impl VM {
         };
 
         let solver = DSolver::new(ctx);
-        let mut state = GAState::new(ctx, project, solver, fn_name)?;
+        let state = GAState::new(ctx, project, solver, fn_name)?;
 
         vm.paths.save_path(Path::new(state, None));
 

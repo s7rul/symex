@@ -1,10 +1,8 @@
 mod array_memory;
-mod byte_addressable_object_memmory;
 mod linear_allocator;
 mod object_memory;
 
 pub use array_memory::ArrayMemory;
-pub use byte_addressable_object_memmory::ByteAddressableObjectMemmory;
 pub use object_memory::ObjectMemory;
 
 use crate::smt::SolverError;

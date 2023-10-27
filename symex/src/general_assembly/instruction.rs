@@ -107,6 +107,12 @@ pub enum Operation {
         shift: Operand,
     },
 
+    Sror {
+        destination: Operand,
+        operand: Operand,
+        shift: Operand,
+    },
+
     /// Zero extend
     /// Zero exstends bits bits from operand and stores it in destination.
     ZeroExtend {
@@ -150,6 +156,9 @@ pub enum Operation {
 
     /// Set the carry flag based on a right shift arithemtic
     SetCFlagSra { operand: Operand, shift: Operand },
+
+    /// Set the carry flag based on a bit rotation
+    SetCFlagRor(Operand),
 
     /// Set overfolow flag
     SetVFlag {

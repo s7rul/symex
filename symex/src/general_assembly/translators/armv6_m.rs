@@ -746,30 +746,35 @@ impl Translator for Instruction {
                 GAInstruction {
                     instruction_size: 16,
                     operations: vec![
-                        GAOperation::Mul { destination: dm.clone(), operand1: n, operand2: dm.clone() },
+                        GAOperation::Mul {
+                            destination: dm.clone(),
+                            operand1: n,
+                            operand2: dm.clone(),
+                        },
                         GAOperation::SetNFlag(dm.clone()),
                         GAOperation::SetZFlag(dm.clone()),
-                    ]
+                    ],
                 }
-            },
+            }
             Operation::MVNReg { m, d } => {
                 let m = arm_register_to_ga_operand(m);
                 let d = arm_register_to_ga_operand(d);
-                
+
                 GAInstruction {
                     instruction_size: 16,
                     operations: vec![
-                        GAOperation::Not { destination: d.clone(), operand: m },
+                        GAOperation::Not {
+                            destination: d.clone(),
+                            operand: m,
+                        },
                         GAOperation::SetNFlag(d.clone()),
                         GAOperation::SetZFlag(d),
-                    ]
+                    ],
                 }
-            },
-            Operation::NOP => {
-                GAInstruction {
-                    instruction_size: 16,
-                    operations: vec![]
-                }
+            }
+            Operation::NOP => GAInstruction {
+                instruction_size: 16,
+                operations: vec![],
             },
             Operation::ORRReg { m, dn } => {
                 let m = arm_register_to_ga_operand(m);
@@ -778,12 +783,16 @@ impl Translator for Instruction {
                 GAInstruction {
                     instruction_size: 16,
                     operations: vec![
-                        GAOperation::Or { destination: dn.clone(), operand1: dn.clone(), operand2: m },
+                        GAOperation::Or {
+                            destination: dn.clone(),
+                            operand1: dn.clone(),
+                            operand2: m,
+                        },
                         GAOperation::SetNFlag(dn.clone()),
                         GAOperation::SetZFlag(dn.clone()),
-                    ]
+                    ],
                 }
-            },
+            }
             Operation::POP { reg_list } => {
                 let mut operations: Vec<GAOperation> = vec![];
                 // set up base address
@@ -866,25 +875,76 @@ impl Translator for Instruction {
                     instruction_size: 16,
                     operations: vec![
                         // set destination to 0
-                        GAOperation::Move { destination: d.clone(), source: Operand::Immidiate(DataWord::Word32(0))},
+                        GAOperation::Move {
+                            destination: d.clone(),
+                            source: Operand::Immidiate(DataWord::Word32(0)),
+                        },
                         // extract all bytes
-                        GAOperation::And { destination: b1.clone(), operand1: m.clone(), operand2: b1_mask },
-                        GAOperation::And { destination: b2.clone(), operand1: m.clone(), operand2: b2_mask },
-                        GAOperation::And { destination: b3.clone(), operand1: m.clone(), operand2: b3_mask },
-                        GAOperation::And { destination: b4.clone(), operand1: m.clone(), operand2: b4_mask },
+                        GAOperation::And {
+                            destination: b1.clone(),
+                            operand1: m.clone(),
+                            operand2: b1_mask,
+                        },
+                        GAOperation::And {
+                            destination: b2.clone(),
+                            operand1: m.clone(),
+                            operand2: b2_mask,
+                        },
+                        GAOperation::And {
+                            destination: b3.clone(),
+                            operand1: m.clone(),
+                            operand2: b3_mask,
+                        },
+                        GAOperation::And {
+                            destination: b4.clone(),
+                            operand1: m.clone(),
+                            operand2: b4_mask,
+                        },
                         // shift all bytes
-                        GAOperation::Sl { destination: b1.clone(), operand: b1.clone(), shift: Operand::Immidiate(DataWord::Word32(24)) },
-                        GAOperation::Sl { destination: b2.clone(), operand: b2.clone(), shift: Operand::Immidiate(DataWord::Word32(8)) },
-                        GAOperation::Srl { destination: b3.clone(), operand: b3.clone(), shift: Operand::Immidiate(DataWord::Word32(8)) },
-                        GAOperation::Srl { destination: b4.clone(), operand: b4.clone(), shift: Operand::Immidiate(DataWord::Word32(24)) },
+                        GAOperation::Sl {
+                            destination: b1.clone(),
+                            operand: b1.clone(),
+                            shift: Operand::Immidiate(DataWord::Word32(24)),
+                        },
+                        GAOperation::Sl {
+                            destination: b2.clone(),
+                            operand: b2.clone(),
+                            shift: Operand::Immidiate(DataWord::Word32(8)),
+                        },
+                        GAOperation::Srl {
+                            destination: b3.clone(),
+                            operand: b3.clone(),
+                            shift: Operand::Immidiate(DataWord::Word32(8)),
+                        },
+                        GAOperation::Srl {
+                            destination: b4.clone(),
+                            operand: b4.clone(),
+                            shift: Operand::Immidiate(DataWord::Word32(24)),
+                        },
                         // or in to destination
-                        GAOperation::Or { destination: d.clone(), operand1: d.clone(), operand2: b1.clone() },
-                        GAOperation::Or { destination: d.clone(), operand1: d.clone(), operand2: b2.clone() },
-                        GAOperation::Or { destination: d.clone(), operand1: d.clone(), operand2: b3.clone() },
-                        GAOperation::Or { destination: d.clone(), operand1: d.clone(), operand2: b4.clone() },
-                    ]
+                        GAOperation::Or {
+                            destination: d.clone(),
+                            operand1: d.clone(),
+                            operand2: b1.clone(),
+                        },
+                        GAOperation::Or {
+                            destination: d.clone(),
+                            operand1: d.clone(),
+                            operand2: b2.clone(),
+                        },
+                        GAOperation::Or {
+                            destination: d.clone(),
+                            operand1: d.clone(),
+                            operand2: b3.clone(),
+                        },
+                        GAOperation::Or {
+                            destination: d.clone(),
+                            operand1: d.clone(),
+                            operand2: b4.clone(),
+                        },
+                    ],
                 }
-            },
+            }
             Operation::REV16 { m, d } => {
                 let m = arm_register_to_ga_operand(m);
                 let d = arm_register_to_ga_operand(d);
@@ -902,25 +962,76 @@ impl Translator for Instruction {
                     instruction_size: 16,
                     operations: vec![
                         // set destination to 0
-                        GAOperation::Move { destination: d.clone(), source: Operand::Immidiate(DataWord::Word32(0))},
+                        GAOperation::Move {
+                            destination: d.clone(),
+                            source: Operand::Immidiate(DataWord::Word32(0)),
+                        },
                         // extract all bytes
-                        GAOperation::And { destination: b1.clone(), operand1: m.clone(), operand2: b1_mask },
-                        GAOperation::And { destination: b2.clone(), operand1: m.clone(), operand2: b2_mask },
-                        GAOperation::And { destination: b3.clone(), operand1: m.clone(), operand2: b3_mask },
-                        GAOperation::And { destination: b4.clone(), operand1: m.clone(), operand2: b4_mask },
+                        GAOperation::And {
+                            destination: b1.clone(),
+                            operand1: m.clone(),
+                            operand2: b1_mask,
+                        },
+                        GAOperation::And {
+                            destination: b2.clone(),
+                            operand1: m.clone(),
+                            operand2: b2_mask,
+                        },
+                        GAOperation::And {
+                            destination: b3.clone(),
+                            operand1: m.clone(),
+                            operand2: b3_mask,
+                        },
+                        GAOperation::And {
+                            destination: b4.clone(),
+                            operand1: m.clone(),
+                            operand2: b4_mask,
+                        },
                         // shift all bytes
-                        GAOperation::Sl { destination: b1.clone(), operand: b1.clone(), shift: Operand::Immidiate(DataWord::Word32(8)) },
-                        GAOperation::Srl { destination: b2.clone(), operand: b2.clone(), shift: Operand::Immidiate(DataWord::Word32(8)) },
-                        GAOperation::Sl { destination: b3.clone(), operand: b3.clone(), shift: Operand::Immidiate(DataWord::Word32(8)) },
-                        GAOperation::Srl { destination: b4.clone(), operand: b4.clone(), shift: Operand::Immidiate(DataWord::Word32(8)) },
+                        GAOperation::Sl {
+                            destination: b1.clone(),
+                            operand: b1.clone(),
+                            shift: Operand::Immidiate(DataWord::Word32(8)),
+                        },
+                        GAOperation::Srl {
+                            destination: b2.clone(),
+                            operand: b2.clone(),
+                            shift: Operand::Immidiate(DataWord::Word32(8)),
+                        },
+                        GAOperation::Sl {
+                            destination: b3.clone(),
+                            operand: b3.clone(),
+                            shift: Operand::Immidiate(DataWord::Word32(8)),
+                        },
+                        GAOperation::Srl {
+                            destination: b4.clone(),
+                            operand: b4.clone(),
+                            shift: Operand::Immidiate(DataWord::Word32(8)),
+                        },
                         // or in to destination
-                        GAOperation::Or { destination: d.clone(), operand1: d.clone(), operand2: b1.clone() },
-                        GAOperation::Or { destination: d.clone(), operand1: d.clone(), operand2: b2.clone() },
-                        GAOperation::Or { destination: d.clone(), operand1: d.clone(), operand2: b3.clone() },
-                        GAOperation::Or { destination: d.clone(), operand1: d.clone(), operand2: b4.clone() },
-                    ]
+                        GAOperation::Or {
+                            destination: d.clone(),
+                            operand1: d.clone(),
+                            operand2: b1.clone(),
+                        },
+                        GAOperation::Or {
+                            destination: d.clone(),
+                            operand1: d.clone(),
+                            operand2: b2.clone(),
+                        },
+                        GAOperation::Or {
+                            destination: d.clone(),
+                            operand1: d.clone(),
+                            operand2: b3.clone(),
+                        },
+                        GAOperation::Or {
+                            destination: d.clone(),
+                            operand1: d.clone(),
+                            operand2: b4.clone(),
+                        },
+                    ],
                 }
-            },
+            }
             Operation::REVSH { m, d } => {
                 let m = arm_register_to_ga_operand(m);
                 let d = arm_register_to_ga_operand(d);
@@ -934,34 +1045,392 @@ impl Translator for Instruction {
                     instruction_size: 16,
                     operations: vec![
                         // set destination to 0
-                        GAOperation::Move { destination: d.clone(), source: Operand::Immidiate(DataWord::Word32(0))},
+                        GAOperation::Move {
+                            destination: d.clone(),
+                            source: Operand::Immidiate(DataWord::Word32(0)),
+                        },
                         // extract all bytes
-                        GAOperation::And { destination: b1.clone(), operand1: m.clone(), operand2: b1_mask },
-                        GAOperation::And { destination: b2.clone(), operand1: m.clone(), operand2: b2_mask },
+                        GAOperation::And {
+                            destination: b1.clone(),
+                            operand1: m.clone(),
+                            operand2: b1_mask,
+                        },
+                        GAOperation::And {
+                            destination: b2.clone(),
+                            operand1: m.clone(),
+                            operand2: b2_mask,
+                        },
                         // shift all bytes
-                        GAOperation::Sl { destination: b1.clone(), operand: b1.clone(), shift: Operand::Immidiate(DataWord::Word32(8)) },
-                        GAOperation::Srl { destination: b2.clone(), operand: b2.clone(), shift: Operand::Immidiate(DataWord::Word32(8)) },
+                        GAOperation::Sl {
+                            destination: b1.clone(),
+                            operand: b1.clone(),
+                            shift: Operand::Immidiate(DataWord::Word32(8)),
+                        },
+                        GAOperation::Srl {
+                            destination: b2.clone(),
+                            operand: b2.clone(),
+                            shift: Operand::Immidiate(DataWord::Word32(8)),
+                        },
                         // or in to destination
-                        GAOperation::Or { destination: d.clone(), operand1: d.clone(), operand2: b1.clone() },
-                        GAOperation::Or { destination: d.clone(), operand1: d.clone(), operand2: b2.clone() },
+                        GAOperation::Or {
+                            destination: d.clone(),
+                            operand1: d.clone(),
+                            operand2: b1.clone(),
+                        },
+                        GAOperation::Or {
+                            destination: d.clone(),
+                            operand1: d.clone(),
+                            operand2: b2.clone(),
+                        },
                         // sign extend
-                        GAOperation::SignExtend { destination: d.clone(), operand: d.clone(), bits: 16 },
-                    ]
+                        GAOperation::SignExtend {
+                            destination: d.clone(),
+                            operand: d.clone(),
+                            bits: 16,
+                        },
+                    ],
                 }
-            },
-            Operation::RORReg { m, dn } => todo!(),
-            Operation::RSBImm { n, d } => todo!(),
-            Operation::SBCReg { m, dn } => todo!(),
-            Operation::SEV => todo!(),
-            Operation::STM { n, reg_list } => todo!(),
-            Operation::STRImm { imm, n, t } => todo!(),
-            Operation::STRReg { m, n, t } => todo!(),
-            Operation::STRBImm { imm, n, t } => todo!(),
-            Operation::STRBReg { m, n, t } => todo!(),
-            Operation::STRHImm { imm, n, t } => todo!(),
-            Operation::STRHReg { m, n, t } => todo!(),
-            Operation::SUBImm { imm, n, d } => todo!(),
-            Operation::SUBReg { m, n, d } => todo!(),
+            }
+            Operation::RORReg { m, dn } => {
+                let m = arm_register_to_ga_operand(m);
+                let dn = arm_register_to_ga_operand(dn);
+                let shift = Operand::Local("shift".to_owned());
+                let mask = Operand::Immidiate(DataWord::Word32(0xff));
+                GAInstruction {
+                    instruction_size: 16,
+                    operations: vec![
+                        GAOperation::And {
+                            destination: shift.clone(),
+                            operand1: m,
+                            operand2: mask,
+                        },
+                        GAOperation::Sror {
+                            destination: dn.clone(),
+                            operand: dn.clone(),
+                            shift: shift,
+                        },
+                        GAOperation::SetNFlag(dn.clone()),
+                        GAOperation::SetZFlag(dn.clone()),
+                        GAOperation::SetCFlagRor(dn),
+                    ],
+                }
+            }
+            Operation::RSBImm { n, d } => {
+                let n = arm_register_to_ga_operand(n);
+                let d = arm_register_to_ga_operand(d);
+                let local_n = Operand::Local("n".to_owned());
+                let zero = Operand::Immidiate(DataWord::Word32(0));
+
+                GAInstruction {
+                    instruction_size: 16,
+                    operations: vec![
+                        GAOperation::Move {
+                            destination: local_n.clone(),
+                            source: n.clone(),
+                        },
+                        GAOperation::Sub {
+                            destination: d.clone(),
+                            operand1: zero.clone(),
+                            operand2: n,
+                        },
+                        GAOperation::SetNFlag(d.clone()),
+                        GAOperation::SetZFlag(d),
+                        GAOperation::SetCFlag {
+                            operand1: zero.clone(),
+                            operand2: local_n.clone(),
+                            sub: true,
+                            carry: false,
+                        },
+                        GAOperation::SetVFlag {
+                            operand1: zero,
+                            operand2: local_n,
+                            sub: true,
+                            carry: false,
+                        },
+                    ],
+                }
+            }
+            Operation::SBCReg { m, dn } => {
+                let m = arm_register_to_ga_operand(m);
+                let dn = arm_register_to_ga_operand(dn);
+                let not_m = Operand::Local("not_m".to_owned());
+                let local_n = Operand::Local("n".to_owned());
+
+                GAInstruction {
+                    instruction_size: 16,
+                    operations: vec![
+                        GAOperation::Move {
+                            destination: local_n.clone(),
+                            source: dn.clone(),
+                        },
+                        GAOperation::Not {
+                            destination: not_m.clone(),
+                            operand: m,
+                        },
+                        GAOperation::Adc {
+                            destination: dn.clone(),
+                            operand1: dn.clone(),
+                            operand2: not_m.clone(),
+                        },
+                        GAOperation::SetNFlag(dn.clone()),
+                        GAOperation::SetZFlag(dn.clone()),
+                        GAOperation::SetCFlag {
+                            operand1: local_n.clone(),
+                            operand2: not_m.clone(),
+                            sub: false,
+                            carry: true,
+                        },
+                        GAOperation::SetVFlag {
+                            operand1: local_n,
+                            operand2: not_m,
+                            sub: false,
+                            carry: true,
+                        },
+                    ],
+                }
+            }
+            Operation::SEV => {
+                // sends a hint event to all cores, multicore is not modeled so do nothing for now
+                GAInstruction {
+                    instruction_size: 16,
+                    operations: vec![],
+                }
+            }
+            Operation::STM { n, reg_list } => {
+                let n = arm_register_to_ga_operand(n);
+                let addr = Operand::Local("addr".to_owned());
+                let to_addr = Operand::AddressInLocal("addr".to_owned(), 32);
+                let four = Operand::Immidiate(DataWord::Word32(4));
+                let mut operations = vec![GAOperation::Move {
+                    destination: addr.clone(),
+                    source: n.clone(),
+                }];
+
+                for reg in reg_list {
+                    let reg = arm_register_to_ga_operand(reg);
+                    operations.push(GAOperation::Move {
+                        destination: to_addr.clone(),
+                        source: reg,
+                    });
+                    operations.push(GAOperation::Add {
+                        destination: addr.clone(),
+                        operand1: addr.clone(),
+                        operand2: four.clone(),
+                    });
+                }
+
+                operations.push(GAOperation::Move {
+                    destination: n,
+                    source: addr,
+                });
+
+                GAInstruction {
+                    instruction_size: 16,
+                    operations,
+                }
+            }
+            Operation::STRImm { imm, n, t } => {
+                let imm = Operand::Immidiate(DataWord::Word32(*imm));
+                let n = arm_register_to_ga_operand(n);
+                let t = arm_register_to_ga_operand(t);
+                let addr = Operand::Local("addr".to_owned());
+                let to_addr = Operand::AddressInLocal("addr".to_owned(), 32);
+
+                GAInstruction {
+                    instruction_size: 16,
+                    operations: vec![
+                        GAOperation::Add {
+                            destination: addr.clone(),
+                            operand1: n,
+                            operand2: imm,
+                        },
+                        GAOperation::Move {
+                            destination: to_addr,
+                            source: t,
+                        },
+                    ],
+                }
+            }
+            Operation::STRReg { m, n, t } => {
+                let m = arm_register_to_ga_operand(m);
+                let n = arm_register_to_ga_operand(n);
+                let t = arm_register_to_ga_operand(t);
+                let addr = Operand::Local("addr".to_owned());
+                let to_addr = Operand::AddressInLocal("addr".to_owned(), 32);
+
+                GAInstruction {
+                    instruction_size: 16,
+                    operations: vec![
+                        GAOperation::Add {
+                            destination: addr.clone(),
+                            operand1: n,
+                            operand2: m,
+                        },
+                        GAOperation::Move {
+                            destination: to_addr,
+                            source: t,
+                        },
+                    ],
+                }
+            }
+            Operation::STRBImm { imm, n, t } => {
+                let imm = Operand::Immidiate(DataWord::Word32(*imm));
+                let n = arm_register_to_ga_operand(n);
+                let t = arm_register_to_ga_operand(t);
+                let addr = Operand::Local("addr".to_owned());
+                let to_addr = Operand::AddressInLocal("addr".to_owned(), 8);
+
+                GAInstruction {
+                    instruction_size: 16,
+                    operations: vec![
+                        GAOperation::Add {
+                            destination: addr.clone(),
+                            operand1: n,
+                            operand2: imm,
+                        },
+                        GAOperation::Move {
+                            destination: to_addr,
+                            source: t,
+                        },
+                    ],
+                }
+            }
+            Operation::STRBReg { m, n, t } => {
+                let m = arm_register_to_ga_operand(m);
+                let n = arm_register_to_ga_operand(n);
+                let t = arm_register_to_ga_operand(t);
+                let addr = Operand::Local("addr".to_owned());
+                let to_addr = Operand::AddressInLocal("addr".to_owned(), 8);
+
+                GAInstruction {
+                    instruction_size: 16,
+                    operations: vec![
+                        GAOperation::Add {
+                            destination: addr.clone(),
+                            operand1: n,
+                            operand2: m,
+                        },
+                        GAOperation::Move {
+                            destination: to_addr,
+                            source: t,
+                        },
+                    ],
+                }
+            }
+            Operation::STRHImm { imm, n, t } => {
+                let imm = Operand::Immidiate(DataWord::Word32(*imm));
+                let n = arm_register_to_ga_operand(n);
+                let t = arm_register_to_ga_operand(t);
+                let addr = Operand::Local("addr".to_owned());
+                let to_addr = Operand::AddressInLocal("addr".to_owned(), 16);
+
+                GAInstruction {
+                    instruction_size: 16,
+                    operations: vec![
+                        GAOperation::Add {
+                            destination: addr.clone(),
+                            operand1: n,
+                            operand2: imm,
+                        },
+                        GAOperation::Move {
+                            destination: to_addr,
+                            source: t,
+                        },
+                    ],
+                }
+            }
+            Operation::STRHReg { m, n, t } => {
+                let m = arm_register_to_ga_operand(m);
+                let n = arm_register_to_ga_operand(n);
+                let t = arm_register_to_ga_operand(t);
+                let addr = Operand::Local("addr".to_owned());
+                let to_addr = Operand::AddressInLocal("addr".to_owned(), 16);
+
+                GAInstruction {
+                    instruction_size: 16,
+                    operations: vec![
+                        GAOperation::Add {
+                            destination: addr.clone(),
+                            operand1: n,
+                            operand2: m,
+                        },
+                        GAOperation::Move {
+                            destination: to_addr,
+                            source: t,
+                        },
+                    ],
+                }
+            }
+            Operation::SUBImm { imm, n, d } => {
+                let imm = Operand::Immidiate(DataWord::Word32(*imm));
+                let n = arm_register_to_ga_operand(n);
+                let d = arm_register_to_ga_operand(d);
+                let local_n = Operand::Local("n".to_owned());
+
+                GAInstruction {
+                    instruction_size: 16,
+                    operations: vec![
+                        GAOperation::Move {
+                            destination: local_n.clone(),
+                            source: n.clone(),
+                        },
+                        GAOperation::Sub {
+                            destination: d.clone(),
+                            operand1: n,
+                            operand2: imm.clone(),
+                        },
+                        GAOperation::SetNFlag(d.clone()),
+                        GAOperation::SetZFlag(d),
+                        GAOperation::SetCFlag {
+                            operand1: local_n.clone(),
+                            operand2: imm.clone(),
+                            sub: true,
+                            carry: false,
+                        },
+                        GAOperation::SetVFlag {
+                            operand1: local_n.clone(),
+                            operand2: imm.clone(),
+                            sub: true,
+                            carry: false,
+                        },
+                    ],
+                }
+            }
+            Operation::SUBReg { m, n, d } => {
+                let m = arm_register_to_ga_operand(m);
+                let n = arm_register_to_ga_operand(n);
+                let d = arm_register_to_ga_operand(d);
+                let local_n = Operand::Local("n".to_owned());
+
+                GAInstruction {
+                    instruction_size: 16,
+                    operations: vec![
+                        GAOperation::Move {
+                            destination: local_n.clone(),
+                            source: n.clone(),
+                        },
+                        GAOperation::Sub {
+                            destination: d.clone(),
+                            operand1: n,
+                            operand2: m.clone(),
+                        },
+                        GAOperation::SetNFlag(d.clone()),
+                        GAOperation::SetZFlag(d),
+                        GAOperation::SetCFlag {
+                            operand1: local_n.clone(),
+                            operand2: m.clone(),
+                            sub: true,
+                            carry: false,
+                        },
+                        GAOperation::SetVFlag {
+                            operand1: local_n.clone(),
+                            operand2: m.clone(),
+                            sub: true,
+                            carry: false,
+                        },
+                    ],
+                }
+            }
             Operation::SUBImmSP { imm } => GAInstruction {
                 instruction_size: 16,
                 operations: vec![GAOperation::Sub {
@@ -970,12 +1439,58 @@ impl Translator for Instruction {
                     operand2: Operand::Immidiate(DataWord::Word32(*imm)),
                 }],
             },
-            Operation::SVC { imm } => todo!(),
-            Operation::SXTB { m, d } => todo!(),
-            Operation::SXTH { m, d } => todo!(),
-            Operation::TSTReg { m, n } => todo!(),
-            Operation::UDFT1 { imm } => todo!(),
-            Operation::UDFT2 { imm } => todo!(),
+            Operation::SVC { imm: _ } => {
+                // to be used to call a supervisor in a OS
+                // this functionality is not modeled so do nothing
+                GAInstruction {
+                    instruction_size: 16,
+                    operations: vec![],
+                }
+            }
+            Operation::SXTB { m, d } => {
+                let m = arm_register_to_ga_operand(m);
+                let d = arm_register_to_ga_operand(d);
+
+                GAInstruction {
+                    instruction_size: 16,
+                    operations: vec![
+                        GAOperation::SignExtend { destination: d, operand: m, bits: 8 }
+                    ]
+                }
+            },
+            Operation::SXTH { m, d } => {
+                let m = arm_register_to_ga_operand(m);
+                let d = arm_register_to_ga_operand(d);
+
+                GAInstruction {
+                    instruction_size: 16,
+                    operations: vec![
+                        GAOperation::SignExtend { destination: d, operand: m, bits: 16 }
+                    ]
+                }
+            },
+            Operation::TSTReg { m, n } => {
+                let m = arm_register_to_ga_operand(m);
+                let n = arm_register_to_ga_operand(n);
+                let result = Operand::Local("result".to_owned());
+
+                GAInstruction {
+                    instruction_size: 16,
+                    operations: vec![
+                        GAOperation::And { destination: result.clone(), operand1: n, operand2: m },
+                        GAOperation::SetNFlag(result.clone()),
+                        GAOperation::SetZFlag(result),
+                    ]
+                }
+            },
+            Operation::UDFT1 { imm: _ } => {
+                // generates a undefined exeption just panic for now
+                unimplemented!()
+            },
+            Operation::UDFT2 { imm: _ } => {
+                // generates a undefined exeption just panic for now
+                unimplemented!()
+            },
             Operation::UXTB { m, d } => GAInstruction {
                 instruction_size: 16,
                 operations: vec![GAOperation::ZeroExtend {
@@ -984,7 +1499,14 @@ impl Translator for Instruction {
                     bits: 8,
                 }],
             },
-            Operation::UXTH { m, d } => todo!(),
+            Operation::UXTH { m, d } => GAInstruction {
+                instruction_size: 16,
+                operations: vec![GAOperation::ZeroExtend {
+                    destination: arm_register_to_ga_operand(d),
+                    operand: arm_register_to_ga_operand(m),
+                    bits: 16,
+                }],
+            },
             Operation::WFE => todo!(),
             Operation::WFI => todo!(),
             Operation::YIELD => todo!(),
