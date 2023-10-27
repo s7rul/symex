@@ -1453,22 +1453,26 @@ impl Translator for Instruction {
 
                 GAInstruction {
                     instruction_size: 16,
-                    operations: vec![
-                        GAOperation::SignExtend { destination: d, operand: m, bits: 8 }
-                    ]
+                    operations: vec![GAOperation::SignExtend {
+                        destination: d,
+                        operand: m,
+                        bits: 8,
+                    }],
                 }
-            },
+            }
             Operation::SXTH { m, d } => {
                 let m = arm_register_to_ga_operand(m);
                 let d = arm_register_to_ga_operand(d);
 
                 GAInstruction {
                     instruction_size: 16,
-                    operations: vec![
-                        GAOperation::SignExtend { destination: d, operand: m, bits: 16 }
-                    ]
+                    operations: vec![GAOperation::SignExtend {
+                        destination: d,
+                        operand: m,
+                        bits: 16,
+                    }],
                 }
-            },
+            }
             Operation::TSTReg { m, n } => {
                 let m = arm_register_to_ga_operand(m);
                 let n = arm_register_to_ga_operand(n);
@@ -1477,20 +1481,24 @@ impl Translator for Instruction {
                 GAInstruction {
                     instruction_size: 16,
                     operations: vec![
-                        GAOperation::And { destination: result.clone(), operand1: n, operand2: m },
+                        GAOperation::And {
+                            destination: result.clone(),
+                            operand1: n,
+                            operand2: m,
+                        },
                         GAOperation::SetNFlag(result.clone()),
                         GAOperation::SetZFlag(result),
-                    ]
+                    ],
                 }
-            },
+            }
             Operation::UDFT1 { imm: _ } => {
                 // generates a undefined exeption just panic for now
                 unimplemented!()
-            },
+            }
             Operation::UDFT2 { imm: _ } => {
                 // generates a undefined exeption just panic for now
                 unimplemented!()
-            },
+            }
             Operation::UXTB { m, d } => GAInstruction {
                 instruction_size: 16,
                 operations: vec![GAOperation::ZeroExtend {

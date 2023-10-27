@@ -110,7 +110,11 @@ impl<'vm> GAExecutor<'vm> {
         match address.get_constant() {
             Some(const_addr) => {
                 if self.project.address_in_range(const_addr) {
-                    Err(super::GAError::WritingToStaticMemoryProhibited)
+                    if bits == self.project.get_word_size() {
+                        Ok(self.get_dexpr_from_dataword(self.project.get_word(const_addr)?))
+                    } else {
+                        todo!()
+                    }
                 } else {
                     let data = self.state.memory.read(address, bits)?;
                     Ok(data)
@@ -570,6 +574,8 @@ impl<'vm> GAExecutor<'vm> {
                 self.state.set_flag("C".to_owned(), carry);
             }
             Operation::SetCFlagRor(result) => {
+                // this is wrong fix later
+                todo!();
                 let result = self.get_operand_value(result, local)?;
                 let word_size_minus_one = self.state.ctx.from_u64(
                     self.project.get_word_size() as u64 - 1,
