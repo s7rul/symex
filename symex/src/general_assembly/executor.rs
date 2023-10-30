@@ -383,7 +383,7 @@ impl<'vm> GAExecutor<'vm> {
                     self.project.get_word_size(),
                 );
                 let value = self.get_operand_value(operand, &local)?;
-                let shift = self.get_operand_value(shift, &local)?;
+                let shift = self.get_operand_value(shift, &local)?.srem(&word_size);
                 let result = value.srl(&shift).or(&value.srl(&word_size).sub(&shift));
                 self.set_operand_value(destination, result, local)?;
             }
@@ -573,10 +573,9 @@ impl<'vm> GAExecutor<'vm> {
                 let carry = result.resize_unsigned(1);
                 self.state.set_flag("C".to_owned(), carry);
             }
-            Operation::SetCFlagRor(result) => {
+            Operation::SetCFlagRor (operand) => {
                 // this is wrong fix later
-                todo!();
-                let result = self.get_operand_value(result, local)?;
+                let result = self.get_operand_value(operand, local)?;
                 let word_size_minus_one = self.state.ctx.from_u64(
                     self.project.get_word_size() as u64 - 1,
                     self.project.get_word_size(),
