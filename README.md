@@ -40,9 +40,9 @@ concrete values for all inputs and output.
 Symex can work on machine code by using a separate executor.
 To execute machine code load a elf file using the command `cargo symex --elf [path to elf file] --function [function name]`.
 This functionality i under active development and is not yet future complete.
-There are some notable differances between the llvm-ir executor and this executor namely:
+There are some notable differences between the llvm-ir executor and this executor namely:
 - Functions from symex lib do not work yet.
-- Every variable that is not initlized to a value is assumed to be symbolic.
+- Every variable that is not initialized to a value is assumed to be symbolic.
 - No return value is shown instead all register values att the end of execution is displayed.
 - Only the target `thumbv6m-none-eabi is supported at the moment`.
 
