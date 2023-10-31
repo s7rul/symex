@@ -1,12 +1,16 @@
 use std::{collections::HashMap, fmt::Debug, fs};
 
 use armv6_m_instruction_parser::parse;
+use gimli::{DebugAbbrev, DebugInfo, DebugPubNames};
 use object::{Object, ObjectSection, ObjectSymbol};
 use tracing::debug;
 
 use crate::{general_assembly::translator::Translator, memory::MemoryError};
 
 use super::{instruction::Instruction, DataHalfWord, DataWord, Endianness, RawDataWord, WordSize};
+
+mod dwarf_helper;
+use dwarf_helper::*;
 
 type Result<T> = std::result::Result<T, ProjectError>;
 
@@ -22,6 +26,15 @@ pub enum ProjectError {
     UnabvalableOperation,
 }
 
+#[derive(Debug, Clone, Copy)]
+pub enum PCHook {
+    Continue,
+    EndSuccess,
+    EndFaliure,
+}
+
+pub type PCHooks = HashMap<u64, PCHook>;
+
 /// Holds all data read from the ELF file.
 // Add all read only memmory here later to handle global constants.
 pub struct Project {
@@ -32,26 +45,11 @@ pub struct Project {
     endianness: Endianness,
     architecture: object::Architecture,
     symtab: HashMap<String, u64>,
+    pc_hooks: PCHooks,
 }
 
 impl Project {
-    pub fn create_dummy(
-        word_size: WordSize,
-        endianness: Endianness,
-        architecture: object::Architecture,
-    ) -> Self {
-        Self {
-            program_memory: vec![],
-            start_addr: 0,
-            end_addr: 0,
-            word_size,
-            endianness,
-            architecture,
-            symtab: HashMap::new(),
-        }
-    }
-
-    pub fn from_path(path: &str) -> Result<Self> {
+    pub fn from_path(path: &str, pc_hooks: Vec<(&str, PCHook)>) -> Result<Self> {
         debug!("Parsing elf file: {}", path);
         let file = fs::read(path).expect("Unable to open file.");
         let obj_file = match object::File::parse(&*file) {
@@ -108,6 +106,24 @@ impl Project {
             );
         }
 
+        let gimli_endian = match endianness {
+            Endianness::Little => gimli::RunTimeEndian::Little,
+            Endianness::Big => gimli::RunTimeEndian::Big,
+        };
+
+        let debug_info = obj_file.section_by_name(".debug_info").unwrap();
+        let debug_info = DebugInfo::new(debug_info.data().unwrap(), gimli_endian);
+
+        let debug_pubnames = obj_file.section_by_name(".debug_pubnames").unwrap();
+        let debug_pubnames = DebugPubNames::new(debug_pubnames.data().unwrap(), gimli_endian);
+
+        let debug_abbrev = obj_file.section_by_name(".debug_abbrev").unwrap();
+        let debug_abbrev = DebugAbbrev::new(debug_abbrev.data().unwrap(), gimli_endian);
+
+        let pc_hooks = construct_pc_hooks(pc_hooks, &debug_pubnames, &debug_info, &debug_abbrev);
+
+        debug!("Created pc hooks: {:?}", pc_hooks);
+
         Ok(Project {
             start_addr: text_start,
             end_addr: text_end,
@@ -116,7 +132,16 @@ impl Project {
             architecture,
             program_memory: text_data,
             symtab,
+            pc_hooks,
         })
+    }
+
+    pub fn get_pc_hook(&self, pc: u64) -> Option<PCHook> {
+        self.pc_hooks.get(&pc).copied()
+    }
+
+    pub fn add_pc_hook(&mut self, pc: u64, hook: PCHook) {
+        self.pc_hooks.insert(pc, hook);
     }
 
     pub fn address_in_range(&self, address: u64) -> bool {
@@ -145,7 +170,6 @@ impl Project {
 
     /// Get the instruction att a address
     pub fn get_instruction(&self, address: u64) -> Result<Instruction> {
-        let address = address & !(0b1); // Not applicable for all architectures TODO: Fix this.
         debug!("Reading instruction from address: {:#010X}", address);
         match self.get_raw_word(address)? {
             RawDataWord::Word64(d) => self.instruction_from_array_ptr(&d),

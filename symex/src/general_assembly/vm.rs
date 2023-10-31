@@ -19,14 +19,14 @@ pub struct VM {
 }
 
 impl VM {
-    pub fn new(project: &'static Project, ctx: &'static DContext, fn_name: &str) -> Result<Self> {
+    pub fn new(project: &'static Project, ctx: &'static DContext, fn_name: &str, end_pc: u64) -> Result<Self> {
         let mut vm = Self {
             project,
             paths: DFSPathSelection::new(),
         };
 
         let solver = DSolver::new(ctx);
-        let state = GAState::new(ctx, project, solver, fn_name)?;
+        let state = GAState::new(ctx, project, solver, fn_name, end_pc)?;
 
         vm.paths.save_path(Path::new(state, None));
 

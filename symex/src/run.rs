@@ -10,10 +10,10 @@ use rustc_demangle::demangle;
 use tracing::{debug, info};
 
 use crate::{
-    general_assembly::{self, state::GAState, GAError},
+    general_assembly::{self, project::PCHook, state::GAState, GAError},
     smt::DContext,
     util::{ErrorReason, ExpressionType, LineTrace, PathStatus, Variable, VisualPathResult},
-    vm,
+    vm, elf_util,
 };
 
 #[derive(Debug)]
@@ -66,18 +66,29 @@ pub fn run_elf(
     let context = Box::new(DContext::new());
     let context = Box::leak(context);
 
-    let project = Box::new(general_assembly::project::Project::from_path(path)?);
+    let end_pc = 0xFFFFFFFE;
+
+    let hooks = vec![
+        ("panic", PCHook::EndFaliure),
+        ("panic_cold_explicit", PCHook::EndFaliure),
+    ];
+
+    let project = Box::new(general_assembly::project::Project::from_path(path, hooks)?);
     let project = Box::leak(project);
+    project.add_pc_hook(end_pc, PCHook::EndSuccess);
     debug!("Created project: {:?}", project);
 
     info!("create VM");
-    let mut vm = general_assembly::vm::VM::new(project, context, function)?;
+    let mut vm = general_assembly::vm::VM::new(project, context, function, end_pc)?;
 
     run_elf_paths(&mut vm)?;
     todo!()
 }
 
 type GAPathResult = general_assembly::executor::PathResult;
+type GAPathStatus = elf_util::PathStatus;
+type GAErrorReason = elf_util::ErrorReason;
+type GAVisualPathResult = elf_util::VisualPathResult;
 
 fn run_elf_paths(vm: &mut general_assembly::vm::VM) -> Result<(), GAError> {
     let mut path_num = 0;
@@ -95,18 +106,17 @@ fn run_elf_paths(vm: &mut general_assembly::vm::VM) -> Result<(), GAError> {
         path_num += 1;
 
         let v_path_result = match path_result {
-            general_assembly::executor::PathResult::Success(_v) => PathStatus::Ok(None),
-            general_assembly::executor::PathResult::Faliure => todo!(),
+            general_assembly::executor::PathResult::Success(_v) => GAPathStatus::Ok(None),
+            general_assembly::executor::PathResult::Faliure => GAPathStatus::Failed(GAErrorReason { error_message: "panic".to_owned() }),
             general_assembly::executor::PathResult::AssumptionUnsat => todo!(),
             general_assembly::executor::PathResult::Suppress => todo!(),
         };
 
         let symbolics = elf_get_values(state.marked_symbolic.iter(), &state)?;
 
-        let result = VisualPathResult {
+        let result = GAVisualPathResult {
             path: path_num,
             result: v_path_result,
-            inputs: vec![],
             symbolics,
         };
         println!("{}", result);
@@ -266,14 +276,16 @@ fn create_error_reason(state: &mut vm::LLVMState, error: vm::AnalysisError) -> E
     }
 }
 
-fn elf_get_values<'a, I>(vars: I, state: &GAState) -> Result<Vec<Variable>, GAError>
+type GAVariable = elf_util::Variable;
+
+fn elf_get_values<'a, I>(vars: I, state: &GAState) -> Result<Vec<GAVariable>, GAError>
 where
-    I: Iterator<Item = &'a Variable>,
+    I: Iterator<Item = &'a GAVariable>,
 {
     let mut results = Vec::new();
     for var in vars {
         let constant = state.constraints.get_value(&var.value)?;
-        let var = Variable {
+        let var = GAVariable {
             name: var.name.clone(),
             value: constant,
             ty: var.ty.clone(),

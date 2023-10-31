@@ -5,9 +5,9 @@ use std::collections::HashMap;
 use tracing::{debug, trace};
 
 use crate::{
-    general_assembly::path_selection::Path,
+    general_assembly::{path_selection::Path, state::HookOrInstruction},
     smt::{DExpr, SolverError},
-    util::{ExpressionType, Variable},
+    elf_util::{ExpressionType, Variable},
 };
 
 use super::{
@@ -45,14 +45,24 @@ impl<'vm> GAExecutor<'vm> {
     pub fn resume_execution(&mut self) -> Result<PathResult> {
         loop {
             let instruction = match self.state.get_next_instruction()? {
-                Some(v) => v,
-                None => {
-                    debug!("Symbolic execution ended succesfully");
-                    for (reg_name, reg_value) in &self.state.registers {
-                        debug!("{}: {:?}", reg_name, reg_value.clone().simplify())
-                    }
-                    return Ok(PathResult::Success(None));
-                }
+                HookOrInstruction::Instruction(v) => v,
+                HookOrInstruction::PcHook(hook) => match hook {
+                    crate::general_assembly::project::PCHook::Continue => todo!(),
+                    crate::general_assembly::project::PCHook::EndSuccess => {
+                        debug!("Symbolic execution ended succesfully");
+                        for (reg_name, reg_value) in &self.state.registers {
+                            debug!("{}: {:?}", reg_name, reg_value.clone().simplify())
+                        }
+                        return Ok(PathResult::Success(None));
+                    },
+                    crate::general_assembly::project::PCHook::EndFaliure => {
+                        debug!("Symbolic execution ended unsuccesfully");
+                        for (reg_name, reg_value) in &self.state.registers {
+                            debug!("{}: {:?}", reg_name, reg_value.clone().simplify())
+                        }
+                        return Ok(PathResult::Faliure)
+                    },
+                },
             };
             trace!("executing instruction: {:?}", instruction);
             self.execute_instruction(&instruction)?;
@@ -573,7 +583,7 @@ impl<'vm> GAExecutor<'vm> {
                 let carry = result.resize_unsigned(1);
                 self.state.set_flag("C".to_owned(), carry);
             }
-            Operation::SetCFlagRor (operand) => {
+            Operation::SetCFlagRor(operand) => {
                 // this is wrong fix later
                 let result = self.get_operand_value(operand, local)?;
                 let word_size_minus_one = self.state.ctx.from_u64(

@@ -5,16 +5,24 @@ use std::collections::HashMap;
 use tracing::{debug, trace};
 
 use crate::{
-    general_assembly::{project::ProjectError, GAError, Result},
+    general_assembly::{
+        project::{PCHook, ProjectError},
+        GAError, Result,
+    },
     memory::ArrayMemory,
     smt::{DContext, DExpr, DSolver},
-    util::Variable,
+    elf_util::Variable,
 };
 
 use super::{
     instruction::{Condition, Instruction},
     project::Project,
 };
+
+pub enum HookOrInstruction {
+    PcHook(PCHook),
+    Instruction(Instruction),
+}
 
 #[derive(Clone, Debug)]
 pub struct GAState {
@@ -27,7 +35,6 @@ pub struct GAState {
     pub registers: HashMap<String, DExpr>,
     pc_register: u64, // this register is special
     flags: HashMap<String, DExpr>,
-    end_pc: u64,
 }
 
 impl GAState {
@@ -36,6 +43,7 @@ impl GAState {
         project: &'static Project,
         constraints: DSolver,
         function: &str,
+        end_address: u64,
     ) -> Result<Self> {
         let pc_reg = match project.get_symbol_address(function) {
             Some(a) => a,
@@ -61,8 +69,7 @@ impl GAState {
         registers.insert("SP".to_owned(), sp_expr);
 
         // set the link register to max value to detect when returning from a function
-        let end_pc_expr = ctx.unsigned_max(ptr_size);
-        let end_pc = end_pc_expr.get_constant().unwrap(); // we know it is constant
+        let end_pc_expr = ctx.from_u64(end_address, ptr_size);
         registers.insert("LR".to_owned(), end_pc_expr);
 
         let mut flags = HashMap::new();
@@ -81,15 +88,12 @@ impl GAState {
             registers,
             pc_register: pc_reg,
             flags,
-            end_pc,
         })
     }
 
     pub fn set_register(&mut self, register: String, expr: DExpr) {
         // crude solution should prbobly change
         if register == "PC" {
-            // A branch has occured if conditional forking state should occur
-            // can't know if it is a conditional branch here thou.
             let value = match expr.get_constant() {
                 Some(v) => v,
                 None => todo!("handle branch to symbolic address"),
@@ -178,12 +182,13 @@ impl GAState {
         })
     }
 
-    pub fn get_next_instruction(&self) -> Result<Option<Instruction>> {
-        let pc = self.pc_register;
-        if pc == self.end_pc {
-            Ok(None)
-        } else {
-            Ok(Some(self.project.get_instruction(self.pc_register)?))
+    pub fn get_next_instruction(&self) -> Result<HookOrInstruction> {
+        let pc = self.pc_register & !(0b1); // Not applicable for all architectures TODO: Fix this.;
+        match self.project.get_pc_hook(pc) {
+            Some(hook) => Ok(HookOrInstruction::PcHook(hook)),
+            None => Ok(HookOrInstruction::Instruction(
+                self.project.get_instruction(self.pc_register)?,
+            )),
         }
     }
 
