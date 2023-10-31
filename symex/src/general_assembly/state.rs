@@ -134,20 +134,18 @@ impl GAState {
         Ok(match condition {
             Condition::EQ => self
                 .get_flag("Z".to_owned())
-                .unwrap()
-                ._eq(&self.ctx.from_bool(true)),
+                .unwrap(),
             Condition::NE => self
                 .get_flag("Z".to_owned())
                 .unwrap()
-                ._eq(&self.ctx.from_bool(false)),
+                .not(),
             Condition::CS => self
                 .get_flag("C".to_owned())
-                .unwrap()
-                ._eq(&self.ctx.from_bool(true)),
+                .unwrap(),
             Condition::CC => self
                 .get_flag("C".to_owned())
                 .unwrap()
-                ._eq(&self.ctx.from_bool(false)),
+                .not(),
             Condition::MI => todo!(),
             Condition::PL => todo!(),
             Condition::VS => todo!(),
@@ -155,24 +153,22 @@ impl GAState {
             Condition::HI => {
                 let c = self
                     .get_flag("C".to_owned())
-                    .unwrap()
-                    ._eq(&self.ctx.from_bool(true));
+                    .unwrap();
                 let z = self
                     .get_flag("Z".to_owned())
                     .unwrap()
-                    ._eq(&self.ctx.from_bool(false));
-                c.and(&z)._eq(&self.ctx.from_bool(true))
+                    .not();
+                c.and(&z)
             }
             Condition::LS => {
                 let c = self
                     .get_flag("C".to_owned())
                     .unwrap()
-                    ._eq(&self.ctx.from_bool(false));
+                    .not();
                 let z = self
                     .get_flag("Z".to_owned())
-                    .unwrap()
-                    ._eq(&self.ctx.from_bool(true));
-                c.or(&z)._eq(&self.ctx.from_bool(true))
+                    .unwrap();
+                c.or(&z)
             }
             Condition::GE => todo!(),
             Condition::LT => todo!(),
