@@ -5,13 +5,13 @@ use std::collections::HashMap;
 use tracing::{debug, trace};
 
 use crate::{
+    elf_util::Variable,
     general_assembly::{
         project::{PCHook, ProjectError},
         GAError, Result,
     },
     memory::ArrayMemory,
     smt::{DContext, DExpr, DSolver},
-    elf_util::Variable,
 };
 
 use super::{
@@ -187,7 +187,7 @@ impl GAState {
         match self.project.get_pc_hook(pc) {
             Some(hook) => Ok(HookOrInstruction::PcHook(hook)),
             None => Ok(HookOrInstruction::Instruction(
-                self.project.get_instruction(self.pc_register)?,
+                self.project.get_instruction(pc)?,
             )),
         }
     }

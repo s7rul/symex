@@ -19,7 +19,12 @@ pub struct VM {
 }
 
 impl VM {
-    pub fn new(project: &'static Project, ctx: &'static DContext, fn_name: &str, end_pc: u64) -> Result<Self> {
+    pub fn new(
+        project: &'static Project,
+        ctx: &'static DContext,
+        fn_name: &str,
+        end_pc: u64,
+    ) -> Result<Self> {
         let mut vm = Self {
             project,
             paths: DFSPathSelection::new(),

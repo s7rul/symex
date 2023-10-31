@@ -10,10 +10,11 @@ use rustc_demangle::demangle;
 use tracing::{debug, info};
 
 use crate::{
+    elf_util,
     general_assembly::{self, project::PCHook, state::GAState, GAError},
     smt::DContext,
     util::{ErrorReason, ExpressionType, LineTrace, PathStatus, Variable, VisualPathResult},
-    vm, elf_util,
+    vm,
 };
 
 #[derive(Debug)]
@@ -107,7 +108,11 @@ fn run_elf_paths(vm: &mut general_assembly::vm::VM) -> Result<(), GAError> {
 
         let v_path_result = match path_result {
             general_assembly::executor::PathResult::Success(_v) => GAPathStatus::Ok(None),
-            general_assembly::executor::PathResult::Faliure => GAPathStatus::Failed(GAErrorReason { error_message: "panic".to_owned() }),
+            general_assembly::executor::PathResult::Faliure => {
+                GAPathStatus::Failed(GAErrorReason {
+                    error_message: "panic".to_owned(),
+                })
+            }
             general_assembly::executor::PathResult::AssumptionUnsat => todo!(),
             general_assembly::executor::PathResult::Suppress => todo!(),
         };

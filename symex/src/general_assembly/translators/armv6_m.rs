@@ -1578,11 +1578,3 @@ fn arm_cond_to_ga_cond(conditon: &ArmCodition) -> Condition {
         armv6_m_instruction_parser::conditions::Condition::None => Condition::None,
     }
 }
-
-fn arm_reg_list_to_ga_op_list(reg_list: &Vec<Register>) -> Vec<Operand> {
-    let mut ret = vec![];
-    for reg in reg_list {
-        ret.push(arm_register_to_ga_operand(reg));
-    }
-    ret
-}

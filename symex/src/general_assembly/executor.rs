@@ -5,9 +5,9 @@ use std::collections::HashMap;
 use tracing::{debug, trace};
 
 use crate::{
+    elf_util::{ExpressionType, Variable},
     general_assembly::{path_selection::Path, state::HookOrInstruction},
     smt::{DExpr, SolverError},
-    elf_util::{ExpressionType, Variable},
 };
 
 use super::{
@@ -54,14 +54,14 @@ impl<'vm> GAExecutor<'vm> {
                             debug!("{}: {:?}", reg_name, reg_value.clone().simplify())
                         }
                         return Ok(PathResult::Success(None));
-                    },
+                    }
                     crate::general_assembly::project::PCHook::EndFaliure => {
                         debug!("Symbolic execution ended unsuccesfully");
                         for (reg_name, reg_value) in &self.state.registers {
                             debug!("{}: {:?}", reg_name, reg_value.clone().simplify())
                         }
-                        return Ok(PathResult::Faliure)
-                    },
+                        return Ok(PathResult::Faliure);
+                    }
                 },
             };
             trace!("executing instruction: {:?}", instruction);
@@ -76,34 +76,6 @@ impl<'vm> GAExecutor<'vm> {
 
         self.vm.paths.save_path(path);
         Ok(())
-    }
-
-    /// Resolve an address expression to a single value.
-    ///
-    /// If the address contain more than one possible address, then we create new paths for all
-    /// but one of the addresses.
-    fn resolve_address(&mut self, address: DExpr) -> Result<DExpr> {
-        if let Some(_) = address.get_constant() {
-            return Ok(address);
-        }
-
-        // Create new paths for all but one of the addresses.
-        let mut addresses = self.state.memory.resolve_addresses(&address, 50)?;
-        for address in addresses.iter().skip(1) {
-            let constraint = address._eq(&address);
-            self.fork(constraint)?;
-        }
-
-        // If we received more than one possible address, then constrain our current address.
-        if addresses.len() > 1 {
-            let constraint = address._eq(&addresses[0]);
-            self.state.constraints.assert(&constraint);
-        }
-
-        match addresses.is_empty() {
-            true => panic!("no address..."),
-            false => Ok(addresses.swap_remove(0)),
-        }
     }
 
     fn get_dexpr_from_dataword(&mut self, data: DataWord) -> DExpr {

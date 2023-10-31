@@ -12,7 +12,7 @@ use tracing::trace;
 
 use crate::smt::{DArray, DContext, DExpr};
 
-use super::{linear_allocator::LinearAllocator, MemoryError, BITS_IN_BYTE};
+use super::{MemoryError, BITS_IN_BYTE};
 
 /// Allocations and backing memory store.
 ///
@@ -26,9 +26,6 @@ pub struct ArrayMemory {
     /// Reference to the context so new symbols can be created.
     ctx: &'static DContext,
 
-    /// Allocator is used to generate new addresses.
-    allocator: LinearAllocator,
-
     /// Size of a pointer.
     ptr_size: u32,
 
@@ -37,12 +34,6 @@ pub struct ArrayMemory {
 }
 
 impl ArrayMemory {
-    #[tracing::instrument(skip(self))]
-    fn allocate(&mut self, bits: u64, align: u64) -> Result<u64, MemoryError> {
-        let (addr, _) = self.allocator.get_address(bits, align)?;
-        Ok(addr)
-    }
-
     #[tracing::instrument(skip(self))]
     pub fn resolve_addresses(
         &self,
@@ -73,7 +64,6 @@ impl ArrayMemory {
 
         Self {
             ctx,
-            allocator: LinearAllocator::new(),
             ptr_size,
             memory,
         }

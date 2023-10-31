@@ -3,48 +3,12 @@
 use std::collections::HashMap;
 
 use gimli::{
-    Attribute, AttributeValue, DW_AT_low_pc, DW_TAG_subprogram, DebugAbbrev, DebugInfo,
-    DebugPubNames, DebuggingInformationEntry, Reader,
+    AttributeValue, DW_AT_low_pc, DW_TAG_subprogram, DebugAbbrev, DebugInfo,
+    DebugPubNames, Reader,
 };
 use tracing::trace;
 
 use super::{PCHook, PCHooks};
-
-pub fn get_addr_from_name<R: Reader>(
-    name: &str,
-    pub_names: &DebugPubNames<R>,
-    debug_info: &DebugInfo<R>,
-    debug_abbrev: &DebugAbbrev<R>,
-) -> u64 {
-    trace!("getting addres from name");
-    let mut name_items = pub_names.items();
-    while let Some(pubname) = name_items.next().unwrap() {
-        let item_name = pubname.name().to_string_lossy().unwrap();
-        if item_name.as_ref() == name {
-            let unit_offset = pubname.unit_header_offset();
-            let die_offset = pubname.die_offset();
-
-            trace!(
-                "found name at offset {:?} and {:?}",
-                unit_offset,
-                die_offset
-            );
-
-            let unit = debug_info.header_from_offset(unit_offset).unwrap();
-            let abbrev = unit.abbreviations(debug_abbrev).unwrap();
-            let die = unit.entry(&abbrev, die_offset).unwrap();
-
-            let addr = die.attr_value(DW_AT_low_pc).unwrap().unwrap();
-
-            if let AttributeValue::Addr(addr_value) = addr {
-                trace!("found att addr: {:#X}", addr_value);
-                todo!();
-                return addr_value;
-            }
-        }
-    }
-    todo!()
-}
 
 pub fn construct_pc_hooks<R: Reader>(
     hooks: Vec<(&str, PCHook)>,
