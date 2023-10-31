@@ -11,7 +11,7 @@ use tracing::{debug, info};
 
 use crate::{
     elf_util,
-    general_assembly::{self, project::PCHook, state::GAState, GAError},
+    general_assembly::{self, project::PCHook, GAError},
     smt::DContext,
     util::{ErrorReason, ExpressionType, LineTrace, PathStatus, Variable, VisualPathResult},
     vm,
