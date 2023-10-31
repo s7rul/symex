@@ -63,7 +63,7 @@ pub fn run_elf(
     path: &str,
     function: &str,
     _cfg: &RunConfig,
-) -> Result<Vec<VisualPathResult>, GAError> {
+) -> Result<Vec<GAVisualPathResult>, GAError> {
     let context = Box::new(DContext::new());
     let context = Box::leak(context);
 
@@ -82,8 +82,7 @@ pub fn run_elf(
     info!("create VM");
     let mut vm = general_assembly::vm::VM::new(project, context, function, end_pc)?;
 
-    run_elf_paths(&mut vm)?;
-    todo!()
+    run_elf_paths(&mut vm)
 }
 
 type GAPathResult = general_assembly::executor::PathResult;
@@ -91,9 +90,10 @@ type GAPathStatus = elf_util::PathStatus;
 type GAErrorReason = elf_util::ErrorReason;
 type GAVisualPathResult = elf_util::VisualPathResult;
 
-fn run_elf_paths(vm: &mut general_assembly::vm::VM) -> Result<(), GAError> {
+fn run_elf_paths(vm: &mut general_assembly::vm::VM) -> Result<Vec<GAVisualPathResult>, GAError> {
     let mut path_num = 0;
     let start = Instant::now();
+    let mut path_results = vec![];
     while let Some((path_result, state)) = vm.run()? {
         if matches!(path_result, GAPathResult::Suppress) {
             debug!("Suppressing path");
@@ -117,17 +117,12 @@ fn run_elf_paths(vm: &mut general_assembly::vm::VM) -> Result<(), GAError> {
             general_assembly::executor::PathResult::Suppress => todo!(),
         };
 
-        let symbolics = elf_get_values(state.marked_symbolic.iter(), &state)?;
-
-        let result = GAVisualPathResult {
-            path: path_num,
-            result: v_path_result,
-            symbolics,
-        };
+        let result = GAVisualPathResult::from_state(state, path_num, v_path_result)?;
         println!("{}", result);
+        path_results.push(result);
     }
     println!("time: {:?}", start.elapsed());
-    Ok(())
+    Ok(path_results)
 }
 
 pub fn run(
@@ -279,26 +274,6 @@ fn create_error_reason(state: &mut vm::LLVMState, error: vm::AnalysisError) -> E
         error_location,
         stack_trace,
     }
-}
-
-type GAVariable = elf_util::Variable;
-
-fn elf_get_values<'a, I>(vars: I, state: &GAState) -> Result<Vec<GAVariable>, GAError>
-where
-    I: Iterator<Item = &'a GAVariable>,
-{
-    let mut results = Vec::new();
-    for var in vars {
-        let constant = state.constraints.get_value(&var.value)?;
-        let var = GAVariable {
-            name: var.name.clone(),
-            value: constant,
-            ty: var.ty.clone(),
-        };
-        results.push(var);
-    }
-
-    Ok(results)
 }
 
 fn get_values<'a, I>(vars: I, state: &vm::LLVMState) -> Result<Vec<Variable>, vm::LLVMExecutorError>

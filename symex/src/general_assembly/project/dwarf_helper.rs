@@ -3,8 +3,7 @@
 use std::collections::HashMap;
 
 use gimli::{
-    AttributeValue, DW_AT_low_pc, DW_TAG_subprogram, DebugAbbrev, DebugInfo,
-    DebugPubNames, Reader,
+    AttributeValue, DW_AT_low_pc, DW_TAG_subprogram, DebugAbbrev, DebugInfo, DebugPubNames, Reader,
 };
 use tracing::trace;
 

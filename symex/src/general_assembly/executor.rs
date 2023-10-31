@@ -556,7 +556,7 @@ impl<'vm> GAExecutor<'vm> {
                 self.state.set_flag("C".to_owned(), carry);
             }
             Operation::SetCFlagRor(operand) => {
-                // this is wrong fix later
+                // this is right for armv6-m but may be wrong for other architectures
                 let result = self.get_operand_value(operand, local)?;
                 let word_size_minus_one = self.state.ctx.from_u64(
                     self.project.get_word_size() as u64 - 1,

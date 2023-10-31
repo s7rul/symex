@@ -1,4 +1,6 @@
 //! Utility structures mostly related to passing information to runner and display to user.
+use crate::general_assembly::state::GAState;
+use crate::general_assembly::GAError;
 use colored::*;
 use core::fmt::{self, Write};
 use indenter::indented;
@@ -24,6 +26,53 @@ pub struct VisualPathResult {
 
     /// Variables explicitly marked as symbolic.
     pub symbolics: Vec<Variable>,
+
+    pub end_state: Vec<Variable>,
+}
+
+fn elf_get_values<'a, I>(vars: I, state: &GAState) -> Result<Vec<Variable>, GAError>
+where
+    I: Iterator<Item = &'a Variable>,
+{
+    let mut results = Vec::new();
+    for var in vars {
+        let constant = state.constraints.get_value(&var.value)?;
+        let var = Variable {
+            name: var.name.clone(),
+            value: constant,
+            ty: var.ty.clone(),
+        };
+        results.push(var);
+    }
+
+    Ok(results)
+}
+
+impl VisualPathResult {
+    pub fn from_state(
+        state: GAState,
+        path_num: usize,
+        result: PathStatus,
+    ) -> Result<Self, GAError> {
+        let symbolics = elf_get_values(state.marked_symbolic.iter(), &state)?;
+        let registers: Vec<Variable> = state
+            .registers
+            .iter()
+            .map(|(reg_name, value)| Variable {
+                name: Some(reg_name.to_owned()),
+                value: value.to_owned(),
+                ty: ExpressionType::Integer(state.project.get_word_size() as usize),
+            })
+            .collect();
+        let end_state = elf_get_values(registers.iter(), &state)?;
+
+        Ok(VisualPathResult {
+            path: path_num,
+            result,
+            symbolics,
+            end_state,
+        })
+    }
 }
 
 impl fmt::Display for VisualPathResult {
@@ -49,6 +98,18 @@ impl fmt::Display for VisualPathResult {
         if !self.symbolics.is_empty() {
             writeln!(f, "\nSymbolic:")?;
             for value in self.symbolics.iter() {
+                let name = if let Some(name) = value.name.as_ref() {
+                    name
+                } else {
+                    "_"
+                };
+                writeln!(indented(f), "{name}: {}", value)?;
+            }
+        }
+
+        if !self.end_state.is_empty() {
+            writeln!(f, "\nEnd state:")?;
+            for value in self.end_state.iter() {
                 let name = if let Some(name) = value.name.as_ref() {
                     name
                 } else {
