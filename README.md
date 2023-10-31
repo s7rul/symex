@@ -45,6 +45,7 @@ There are some notable differences between the llvm-ir executor and this executo
 - Every variable that is not initialized to a value is assumed to be symbolic.
 - No return value is shown instead all register values att the end of execution is displayed.
 - Only the target `thumbv6m-none-eabi is supported at the moment`.
+- Ta analyse a function it must have a entry in the `.symtab` section of the elf file. All symbols in a elf file can be shown using the `readelf -s [path to elf file]` command. To tell rustc to not mangle the function name the attribute `#[no_mangle]` can be used.
 
 
 ## Building
