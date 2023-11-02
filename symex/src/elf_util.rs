@@ -27,6 +27,7 @@ pub struct VisualPathResult {
     /// Variables explicitly marked as symbolic.
     pub symbolics: Vec<Variable>,
 
+    /// All register values att the end of execution.
     pub end_state: Vec<Variable>,
 }
 

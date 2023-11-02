@@ -62,6 +62,7 @@ impl<'vm> GAExecutor<'vm> {
                         }
                         return Ok(PathResult::Faliure);
                     }
+                    crate::general_assembly::project::PCHook::Suppress => todo!(),
                 },
             };
             trace!("executing instruction: {:?}", instruction);

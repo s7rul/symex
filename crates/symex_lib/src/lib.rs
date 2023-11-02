@@ -23,7 +23,7 @@ pub use valid_derive::Validate;
 /// }
 /// ```
 #[inline(never)]
-pub fn assume(condition: bool) {
+pub extern "C" fn assume(condition: bool) {
     let mut condition = condition;
     black_box(&mut condition);
 }

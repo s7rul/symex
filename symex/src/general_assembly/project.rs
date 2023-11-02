@@ -31,6 +31,7 @@ pub enum PCHook {
     Continue,
     EndSuccess,
     EndFaliure,
+    Suppress,
 }
 
 pub type PCHooks = HashMap<u64, PCHook>;
