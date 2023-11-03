@@ -1,6 +1,6 @@
 //! Helper functions to read dwarf debug data.
 
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 
 use gimli::{
     AttributeValue, DW_AT_low_pc, DW_TAG_subprogram, DebugAbbrev, DebugInfo, DebugPubNames, Reader,
@@ -18,6 +18,7 @@ pub fn construct_pc_hooks<R: Reader>(
     trace!("Constructing PC hooks");
     let mut ret: PCHooks = HashMap::new();
     let mut name_items = pub_names.items();
+    let mut found_hooks = HashSet::new();
     while let Some(pubname) = name_items.next().unwrap() {
         let item_name = pubname.name().to_string_lossy().unwrap();
         for (name, hook) in &hooks {
@@ -31,15 +32,19 @@ pub fn construct_pc_hooks<R: Reader>(
 
                 let die_type = die.tag();
                 if die_type == DW_TAG_subprogram {
+                    found_hooks.insert(name);
                     let addr = die.attr_value(DW_AT_low_pc).unwrap().unwrap();
 
                     if let AttributeValue::Addr(addr_value) = addr {
-                        trace!("found att addr: {:#X}", addr_value);
+                        trace!("found hook for {} att addr: {:#X}", name, addr_value);
                         ret.insert(addr_value, *hook);
                     }
                 }
             }
         }
+    }
+    if found_hooks.len() < hooks.len() {
+        panic!() // fix a proper error here later
     }
     ret
 }

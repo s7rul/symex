@@ -23,9 +23,18 @@ pub use valid_derive::Validate;
 /// }
 /// ```
 #[inline(never)]
-pub extern "C" fn assume(condition: bool) {
+pub fn assume(condition: bool) {
     let mut condition = condition;
-    black_box(&mut condition);
+    if condition {
+        black_box(&mut condition);
+    } else {
+        suppress_path();
+    }
+}
+
+#[inline(never)]
+fn suppress_path() {
+    panic!()
 }
 
 /// Creates a new symbolic value for `value`. This removes all constraints.

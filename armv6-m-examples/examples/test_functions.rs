@@ -78,6 +78,13 @@ fn test_nested_if_over_function(n: u8) -> u8 {
 
 #[inline(never)]
 #[no_mangle]
+fn test_assume(n: u8) -> u8 {
+    assume(n < 5);
+    simple_loop(n)
+}
+
+#[inline(never)]
+#[no_mangle]
 fn test_simple_if(n: u8) -> u8 {
     if n == 3 {
         1
@@ -89,14 +96,19 @@ fn test_simple_if(n: u8) -> u8 {
 }
 
 #[inline(never)]
-fn simple_loop_llvm() {
+fn test_assume_llvm() -> u8 {
     let n = any();
-    simple_loop(n);
+    test_assume(n)
 }
 
+#[inline(never)]
+fn simple_loop_llvm() -> u8 {
+    let n = any();
+    simple_loop(n)
+}
 
 fn run_function(f: fn(u8) -> u8) {
-    for n in 0..30 {
+    for n in 0..u8::MAX {
         let r = f(n);
         info!("{} {}", n, r);
     }
@@ -130,9 +142,10 @@ fn main() -> ! {
     run_function(panic_test_divide_by_zero);
     run_function(panic_test_core);
     run_function(panic_test_defmt);
+    run_function(test_assume);
     simple_loop_llvm();
+    test_assume_llvm();
     loop {}
-
 }
 
 // End of file

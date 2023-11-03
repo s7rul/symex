@@ -72,6 +72,7 @@ pub fn run_elf(
     let hooks = vec![
         ("panic", PCHook::EndFaliure),
         ("panic_cold_explicit", PCHook::EndFaliure),
+        ("suppress_path", PCHook::Suppress),
     ];
 
     let project = Box::new(general_assembly::project::Project::from_path(path, hooks)?);
