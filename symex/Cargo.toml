@@ -18,5 +18,5 @@ colored = "2.0"
 rand = "0.8.5"
 object = "0.32.1"
 
-armv6-m-instruction-parser = {git = "https://github.com/s7rul/armv6-m-instruction-parser.git"}
+armv6-m-instruction-parser = "0.1"
 gimli = "0.28.0"
