@@ -98,7 +98,6 @@ mod app {
             &clocks.system_clock,
         ));
 
-
         // Spawn heartbeat task
         heartbeat::spawn().ok();
 

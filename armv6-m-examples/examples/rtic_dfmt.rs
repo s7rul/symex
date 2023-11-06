@@ -2,7 +2,6 @@
 #![no_std]
 #![feature(type_alias_impl_trait)]
 
-
 // TODO(7) Configure the `rtic::app` macro
 #[rtic::app(
     // TODO: Replace `some_hal::pac` with the path to the PAC
@@ -21,8 +20,8 @@ mod app {
     use panic_probe as _;
     //use panic_halt as _;
 
-    use rp2040_hal as hal;
     use rp2040_boot2;
+    use rp2040_hal as hal;
     // Shared resources go here
     #[shared]
     struct Shared {
@@ -43,7 +42,6 @@ mod app {
         // let sysclk = { /* clock setup + returning sysclk as an u32 */ };
         // let token = rtic_monotonics::create_systick_token!();
         // rtic_monotonics::systick::Systick::new(cx.core.SYST, sysclk, token);
-
 
         task1::spawn().ok();
 
