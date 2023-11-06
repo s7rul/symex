@@ -6,13 +6,13 @@ use tracing::{debug, trace};
 
 use crate::{
     elf_util::{ExpressionType, Variable},
-    general_assembly::{path_selection::Path, state::HookOrInstruction},
-    smt::{DExpr, SolverError},
+    general_assembly::{path_selection::Path, state::HookOrInstruction, Endianness, WordSize, executor},
+    smt::{DExpr, SolverError, DContext, DSolver},
 };
 
 use super::{
     instruction::{Instruction, Operand, Operation},
-    project::Project,
+    project::{Project, self},
     state::GAState,
     vm::VM,
     DataWord, Result,
@@ -572,4 +572,62 @@ impl<'vm> GAExecutor<'vm> {
         }
         Ok(())
     }
+}
+
+fn setup_test_vm() -> VM {
+    // create an empty project
+    let project = Box::new(Project::manual_project(
+        vec![],
+        0,
+        0,
+        WordSize::Bit32,
+        Endianness::Little,
+        object::Architecture::Arm,
+        HashMap::new(),
+        HashMap::new(),
+    ));
+    let project = Box::leak(project);
+    let context = Box::new(DContext::new());
+    let context = Box::leak(context);
+    let solver = DSolver::new(context);
+    let state = GAState::create_test_state(project, context, solver, 0, u32::MAX as u64);
+    let vm = VM::new_with_state(project, state);
+    vm
+}
+
+#[test]
+fn test_move() {
+    let mut vm = setup_test_vm();
+    let project = vm.project;
+    let mut executor = GAExecutor::from_state(vm.paths.get_path().unwrap().state, &mut vm, project);
+    let mut local = HashMap::new();
+    let operand_r0 = Operand::Register("R0".to_owned());
+
+    // move imm into reg
+    let operation = Operation::Move { destination: operand_r0.clone(), source: Operand::Immidiate(DataWord::Word32(42)) };
+    executor.executer_operation(&operation, &mut local).ok();
+
+    let r0 = executor.get_operand_value(&operand_r0, &local).unwrap().get_constant().unwrap();
+    assert_eq!(r0, 42);
+
+    // move reg to local
+    let local_r0 = Operand::Local("R0".to_owned());
+    let operation = Operation::Move { destination: local_r0.clone(), source: operand_r0.clone() };
+    executor.executer_operation(&operation, &mut local).ok();
+
+    let r0 = executor.get_operand_value(&local_r0, &local).unwrap().get_constant().unwrap();
+    assert_eq!(r0, 42);
+
+    // move immidiate to local memmory addr
+    let imm = Operand::Immidiate(DataWord::Word32(23));
+    let memmory_op = Operand::AddressInLocal("R0".to_owned(), 32);
+    let operation = Operation::Move { destination: memmory_op.clone(), source: imm.clone() };
+    executor.executer_operation(&operation, &mut local).ok();
+
+    let dexpr_addr = executor.get_dexpr_from_dataword(DataWord::Word32(42));
+    let in_memmory_value = executor.state.read_word_from_memory(&dexpr_addr).unwrap().get_constant().unwrap();
+
+    assert_eq!(in_memmory_value, 23)
+
+    
 }

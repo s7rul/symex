@@ -38,6 +38,17 @@ impl VM {
         Ok(vm)
     }
 
+    pub fn new_with_state(project: &'static Project, state: GAState) -> Self {
+        let mut vm = Self {
+            project,
+            paths: DFSPathSelection::new(),
+        };
+
+        vm.paths.save_path(Path::new(state, None));
+
+        vm
+    }
+
     pub fn run(&mut self) -> Result<Option<(PathResult, GAState)>> {
         while let Some(path) = self.paths.get_path() {
             // try stuff

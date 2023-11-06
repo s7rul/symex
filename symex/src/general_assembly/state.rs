@@ -91,6 +91,40 @@ impl GAState {
         })
     }
 
+    pub fn create_test_state(project: &'static Project, ctx: &'static DContext, constraints: DSolver, start_pc: u64, start_stack: u64) -> Self {
+        let pc_reg = start_pc;
+        let ptr_size = project.get_ptr_size();
+
+        let sp_reg = start_stack;
+        debug!("Found stack start at addr: {:#X}.", sp_reg);
+
+        let memory = ArrayMemory::new(ctx, ptr_size);
+        let mut registers = HashMap::new();
+        let pc_expr = ctx.from_u64(pc_reg, ptr_size);
+        registers.insert("PC".to_owned(), pc_expr);
+
+        let sp_expr = ctx.from_u64(sp_reg, ptr_size);
+        registers.insert("SP".to_owned(), sp_expr);
+
+        let mut flags = HashMap::new();
+        flags.insert("N".to_owned(), ctx.unconstrained(1, "flags.N"));
+        flags.insert("Z".to_owned(), ctx.unconstrained(1, "flags.Z"));
+        flags.insert("C".to_owned(), ctx.unconstrained(1, "flags.C"));
+        flags.insert("V".to_owned(), ctx.unconstrained(1, "flags.V"));
+
+        GAState {
+            project,
+            ctx,
+            constraints,
+            marked_symbolic: Vec::new(),
+            memory,
+            cycle_count: 0,
+            registers,
+            pc_register: pc_reg,
+            flags,
+        }
+    }
+
     pub fn set_register(&mut self, register: String, expr: DExpr) {
         // crude solution should prbobly change
         if register == "PC" {

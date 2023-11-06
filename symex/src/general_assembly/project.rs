@@ -50,6 +50,27 @@ pub struct Project {
 }
 
 impl Project {
+    pub fn manual_project(
+        program_memory: Vec<u8>,
+        start_addr: u64,
+        end_addr: u64,
+        word_size: WordSize,
+        endianness: Endianness,
+        architecture: object::Architecture,
+        symtab: HashMap<String, u64>,
+        pc_hooks: PCHooks,
+    ) -> Project {
+        Project {
+            program_memory,
+            start_addr,
+            end_addr,
+            word_size,
+            endianness,
+            architecture,
+            symtab,
+            pc_hooks,
+        }
+    }
     pub fn from_path(path: &str, pc_hooks: Vec<(&str, PCHook)>) -> Result<Self> {
         debug!("Parsing elf file: {}", path);
         let file = fs::read(path).expect("Unable to open file.");
