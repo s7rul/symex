@@ -29,6 +29,9 @@ pub struct VisualPathResult {
 
     /// All register values att the end of execution.
     pub end_state: Vec<Variable>,
+
+    /// The number of instructions executed in the path
+    pub instruction_count: usize,
 }
 
 fn elf_get_values<'a, I>(vars: I, state: &GAState) -> Result<Vec<Variable>, GAError>
@@ -72,6 +75,7 @@ impl VisualPathResult {
             result,
             symbolics,
             end_state,
+            instruction_count: state.get_instruction_count()
         })
     }
 }
@@ -119,6 +123,8 @@ impl fmt::Display for VisualPathResult {
                 writeln!(indented(f), "{name}: {}", value)?;
             }
         }
+        
+        writeln!(f, "Instructions executed in path: {}", self.instruction_count)?;
 
         Ok(())
     }

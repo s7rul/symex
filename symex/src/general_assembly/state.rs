@@ -35,6 +35,7 @@ pub struct GAState {
     pub registers: HashMap<String, DExpr>,
     pc_register: u64, // this register is special
     flags: HashMap<String, DExpr>,
+    instruction_counter: usize,
 }
 
 impl GAState {
@@ -88,7 +89,18 @@ impl GAState {
             registers,
             pc_register: pc_reg,
             flags,
+            instruction_counter: 0,
         })
+    }
+
+    /// Increments the instruction counter by one.
+    pub fn increment_instruction_count(&mut self) {
+        self.instruction_counter += 1;
+    }
+    
+    /// Gets the current instruction count
+    pub fn get_instruction_count(&self) -> usize {
+        self.instruction_counter
     }
 
     pub fn create_test_state(project: &'static Project, ctx: &'static DContext, constraints: DSolver, start_pc: u64, start_stack: u64) -> Self {
@@ -122,6 +134,7 @@ impl GAState {
             registers,
             pc_register: pc_reg,
             flags,
+            instruction_counter: 0,
         }
     }
 

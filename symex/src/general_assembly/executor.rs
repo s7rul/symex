@@ -241,6 +241,8 @@ impl<'vm> GAExecutor<'vm> {
             self.executer_operation(operation, &mut local)?;
         }
 
+        self.state.increment_instruction_count();
+
         Ok(())
     }
 
