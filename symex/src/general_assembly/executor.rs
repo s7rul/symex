@@ -72,7 +72,7 @@ impl<'vm> GAExecutor<'vm> {
         }
     }
 
-    pub fn fork(&mut self, constraint: DExpr) -> Result<()> {
+    fn fork(&mut self, constraint: DExpr) -> Result<()> {
         trace!("Save backtracking path: constraint={:?}", constraint);
         let forked_state = self.state.clone();
         let path = Path::new(forked_state, Some(constraint));
@@ -235,13 +235,16 @@ impl<'vm> GAExecutor<'vm> {
             ),
         );
 
+        // increment instruction count before execution
+        // so that forked path count this instruction
+        self.state.increment_instruction_count();
+
         // initiate local variable storage
         let mut local: HashMap<String, DExpr> = HashMap::new();
         for operation in &i.operations {
             self.executer_operation(operation, &mut local)?;
         }
 
-        self.state.increment_instruction_count();
 
         Ok(())
     }
