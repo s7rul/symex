@@ -679,3 +679,45 @@ fn test_add() {
     let r0_value = executor.get_operand_value(&r0, &local).unwrap().get_constant().unwrap();
     assert_eq!(r0_value, 41);
 }
+
+#[test]
+fn test_sub() {
+    let mut vm = setup_test_vm();
+    let project = vm.project;
+    let mut executor = GAExecutor::from_state(vm.paths.get_path().unwrap().state, &mut vm, project);
+    let mut local = HashMap::new();
+
+    let r0 = Operand::Register("R0".to_owned());
+    let imm_42 = Operand::Immidiate(DataWord::Word32(42));
+    let imm_imin = Operand::Immidiate(DataWord::Word32(i32::MIN as u32));
+    let imm_16 = Operand::Immidiate(DataWord::Word32(16));
+    let imm_minus70 = Operand::Immidiate(DataWord::Word32(-70i32 as u32));
+
+    // test simple sub
+    let operation = Operation::Sub { destination: r0.clone(), operand1: imm_42.clone(), operand2: imm_16.clone() };
+    executor.executer_operation(&operation, &mut local).ok();
+
+    let r0_value = executor.get_operand_value(&r0, &local).unwrap().get_constant().unwrap();
+    assert_eq!(r0_value, 26);
+
+    // test sub with same operand and destination
+    let operation = Operation::Sub { destination: r0.clone(), operand1: r0.clone(), operand2: imm_16.clone() };
+    executor.executer_operation(&operation, &mut local).ok();
+
+    let r0_value = executor.get_operand_value(&r0, &local).unwrap().get_constant().unwrap();
+    assert_eq!(r0_value, 10);
+
+    // test sub with negative number
+    let operation = Operation::Sub { destination: r0.clone(), operand1: imm_42.clone(), operand2: imm_minus70.clone() };
+    executor.executer_operation(&operation, &mut local).ok();
+
+    let r0_value = executor.get_operand_value(&r0, &local).unwrap().get_constant().unwrap();
+    assert_eq!(r0_value, 112);
+
+    // test sub underflow
+    let operation = Operation::Sub { destination: r0.clone(), operand1: imm_42.clone(), operand2: imm_imin.clone() };
+    executor.executer_operation(&operation, &mut local).ok();
+
+    let r0_value = executor.get_operand_value(&r0, &local).unwrap().get_constant().unwrap();
+    assert_eq!(r0_value, ((i32::MIN) as u32 + 42) as u64);
+}
