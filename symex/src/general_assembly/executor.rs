@@ -627,7 +627,55 @@ fn test_move() {
     let dexpr_addr = executor.get_dexpr_from_dataword(DataWord::Word32(42));
     let in_memmory_value = executor.state.read_word_from_memory(&dexpr_addr).unwrap().get_constant().unwrap();
 
-    assert_eq!(in_memmory_value, 23)
+    assert_eq!(in_memmory_value, 23);
 
-    
+    // move from memmory to a local
+    let operation = Operation::Move { destination: local_r0.clone(), source: memmory_op.clone() };
+    executor.executer_operation(&operation, &mut local).ok();
+
+    let local_value = executor.get_operand_value(&local_r0, &local).unwrap().get_constant().unwrap();
+
+    assert_eq!(local_value, 23);
+}
+
+#[test]
+fn test_add() {
+    let mut vm = setup_test_vm();
+    let project = vm.project;
+    let mut executor = GAExecutor::from_state(vm.paths.get_path().unwrap().state, &mut vm, project);
+    let mut local = HashMap::new();
+
+    let r0 = Operand::Register("R0".to_owned());
+    let imm_42 = Operand::Immidiate(DataWord::Word32(42));
+    let imm_umax = Operand::Immidiate(DataWord::Word32(u32::MAX));
+    let imm_16 = Operand::Immidiate(DataWord::Word32(16));
+    let imm_minus70 = Operand::Immidiate(DataWord::Word32(-70i32 as u32));
+
+    // test simple add
+    let operation = Operation::Add { destination: r0.clone(), operand1: imm_42.clone(), operand2: imm_16.clone() };
+    executor.executer_operation(&operation, &mut local).ok();
+
+    let r0_value = executor.get_operand_value(&r0, &local).unwrap().get_constant().unwrap();
+    assert_eq!(r0_value, 58);
+
+    // test add with same operand and destination
+    let operation = Operation::Add { destination: r0.clone(), operand1: r0.clone(), operand2: imm_16.clone() };
+    executor.executer_operation(&operation, &mut local).ok();
+
+    let r0_value = executor.get_operand_value(&r0, &local).unwrap().get_constant().unwrap();
+    assert_eq!(r0_value, 74);
+
+    // test add with negative number
+    let operation = Operation::Add { destination: r0.clone(), operand1: imm_42.clone(), operand2: imm_minus70.clone() };
+    executor.executer_operation(&operation, &mut local).ok();
+
+    let r0_value = executor.get_operand_value(&r0, &local).unwrap().get_constant().unwrap();
+    assert_eq!(r0_value, (-28i32 as u32) as u64);
+
+    // test add overflow
+    let operation = Operation::Add { destination: r0.clone(), operand1: imm_42.clone(), operand2: imm_umax.clone() };
+    executor.executer_operation(&operation, &mut local).ok();
+
+    let r0_value = executor.get_operand_value(&r0, &local).unwrap().get_constant().unwrap();
+    assert_eq!(r0_value, 41);
 }
