@@ -41,11 +41,14 @@ Symex can work on machine code by using a separate executor.
 To execute machine code load a elf file using the command `cargo symex --elf [path to elf file] --function [function name]`.
 This functionality i under active development and is not yet future complete.
 There are some notable differences between the llvm-ir executor and this executor namely:
-- Functions from symex lib do not work yet.
+- Only the assume function in symex_lib work at the moment.
 - Every variable that is not initialized to a value is assumed to be symbolic.
 - No return value is shown instead all register values att the end of execution is displayed.
 - Only the target `thumbv6m-none-eabi is supported at the moment`.
 - Ta analyse a function it must have a entry in the `.symtab` section of the elf file. All symbols in a elf file can be shown using the `readelf -s [path to elf file]` command. To tell rustc to not mangle the function name the attribute `#[no_mangle]` can be used.
+
+### Notes on the max cycle count on armv6-m
+The max cycle count for each path is calculated by counting the number of cycles for each instruction according to [this document](https://developer.arm.com/documentation/ddi0432/c/programmers-model/instruction-set-summary). It assumes a core without wait-states.
 
 
 ## Building
