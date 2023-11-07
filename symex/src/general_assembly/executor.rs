@@ -6,13 +6,15 @@ use tracing::{debug, trace};
 
 use crate::{
     elf_util::{ExpressionType, Variable},
-    general_assembly::{path_selection::Path, state::HookOrInstruction, Endianness, WordSize, executor},
-    smt::{DExpr, SolverError, DContext, DSolver},
+    general_assembly::{
+        executor, path_selection::Path, state::HookOrInstruction, Endianness, WordSize,
+    },
+    smt::{DContext, DExpr, DSolver, SolverError},
 };
 
 use super::{
-    instruction::{Instruction, Operand, Operation},
-    project::{Project, self},
+    instruction::{Instruction, Operand, Operation, CycleCount},
+    project::{self, Project},
     state::GAState,
     vm::VM,
     DataWord, Result,
@@ -44,6 +46,9 @@ impl<'vm> GAExecutor<'vm> {
 
     pub fn resume_execution(&mut self) -> Result<PathResult> {
         loop {
+            // Add cycles to cycle count
+            self.state.increment_cycle_count();
+
             let instruction = match self.state.get_next_instruction()? {
                 HookOrInstruction::Instruction(v) => v,
                 HookOrInstruction::PcHook(hook) => match hook {
@@ -69,6 +74,8 @@ impl<'vm> GAExecutor<'vm> {
             };
             trace!("executing instruction: {:?}", instruction);
             self.execute_instruction(&instruction)?;
+
+            self.state.set_last_instruction(instruction);
         }
     }
 
@@ -223,7 +230,7 @@ impl<'vm> GAExecutor<'vm> {
     }
 
     fn execute_instruction(&mut self, i: &Instruction) -> Result<()> {
-        // Always increment pc before doing anything
+        // Always increment pc before executing the operations
         let new_pc = self.state.get_register("PC".to_owned()).unwrap();
         self.state.set_register(
             "PC".to_owned(),
@@ -234,6 +241,9 @@ impl<'vm> GAExecutor<'vm> {
                     .from_u64((i.instruction_size / 8) as u64, self.project.get_ptr_size()),
             ),
         );
+
+        // reset has branched before execution of instruction.
+        self.state.reset_has_jumped();
 
         // increment instruction count before execution
         // so that forked path count this instruction
@@ -387,6 +397,7 @@ impl<'vm> GAExecutor<'vm> {
                 // if constant just jump
                 if let Some(constant_c) = c.get_constant_bool() {
                     if constant_c {
+                        self.state.set_has_jumped();
                         let destination = self.get_operand_value(destination, &local)?;
                         self.state.set_register("PC".to_owned(), destination);
                     }
@@ -405,9 +416,13 @@ impl<'vm> GAExecutor<'vm> {
                     (true, true) => {
                         self.fork(c.not())?;
                         self.state.constraints.assert(&c);
+                        self.state.set_has_jumped();
                         Ok(self.get_operand_value(destination, &local)?)
                     }
-                    (true, false) => Ok(self.get_operand_value(destination, &local)?),
+                    (true, false) => {
+                        self.state.set_has_jumped();
+                        Ok(self.get_operand_value(destination, &local)?)
+                    }
                     (false, true) => Ok(self.state.get_register("PC".to_owned()).unwrap()), // safe to asume PC exist
                     (false, false) => Err(SolverError::Unsat),
                 }?;
@@ -609,36 +624,65 @@ fn test_move() {
     let operand_r0 = Operand::Register("R0".to_owned());
 
     // move imm into reg
-    let operation = Operation::Move { destination: operand_r0.clone(), source: Operand::Immidiate(DataWord::Word32(42)) };
+    let operation = Operation::Move {
+        destination: operand_r0.clone(),
+        source: Operand::Immidiate(DataWord::Word32(42)),
+    };
     executor.executer_operation(&operation, &mut local).ok();
 
-    let r0 = executor.get_operand_value(&operand_r0, &local).unwrap().get_constant().unwrap();
+    let r0 = executor
+        .get_operand_value(&operand_r0, &local)
+        .unwrap()
+        .get_constant()
+        .unwrap();
     assert_eq!(r0, 42);
 
     // move reg to local
     let local_r0 = Operand::Local("R0".to_owned());
-    let operation = Operation::Move { destination: local_r0.clone(), source: operand_r0.clone() };
+    let operation = Operation::Move {
+        destination: local_r0.clone(),
+        source: operand_r0.clone(),
+    };
     executor.executer_operation(&operation, &mut local).ok();
 
-    let r0 = executor.get_operand_value(&local_r0, &local).unwrap().get_constant().unwrap();
+    let r0 = executor
+        .get_operand_value(&local_r0, &local)
+        .unwrap()
+        .get_constant()
+        .unwrap();
     assert_eq!(r0, 42);
 
     // move immidiate to local memmory addr
     let imm = Operand::Immidiate(DataWord::Word32(23));
     let memmory_op = Operand::AddressInLocal("R0".to_owned(), 32);
-    let operation = Operation::Move { destination: memmory_op.clone(), source: imm.clone() };
+    let operation = Operation::Move {
+        destination: memmory_op.clone(),
+        source: imm.clone(),
+    };
     executor.executer_operation(&operation, &mut local).ok();
 
     let dexpr_addr = executor.get_dexpr_from_dataword(DataWord::Word32(42));
-    let in_memmory_value = executor.state.read_word_from_memory(&dexpr_addr).unwrap().get_constant().unwrap();
+    let in_memmory_value = executor
+        .state
+        .read_word_from_memory(&dexpr_addr)
+        .unwrap()
+        .get_constant()
+        .unwrap();
 
     assert_eq!(in_memmory_value, 23);
 
     // move from memmory to a local
-    let operation = Operation::Move { destination: local_r0.clone(), source: memmory_op.clone() };
+    let operation = Operation::Move {
+        destination: local_r0.clone(),
+        source: memmory_op.clone(),
+    };
     executor.executer_operation(&operation, &mut local).ok();
 
-    let local_value = executor.get_operand_value(&local_r0, &local).unwrap().get_constant().unwrap();
+    let local_value = executor
+        .get_operand_value(&local_r0, &local)
+        .unwrap()
+        .get_constant()
+        .unwrap();
 
     assert_eq!(local_value, 23);
 }
@@ -657,31 +701,63 @@ fn test_add() {
     let imm_minus70 = Operand::Immidiate(DataWord::Word32(-70i32 as u32));
 
     // test simple add
-    let operation = Operation::Add { destination: r0.clone(), operand1: imm_42.clone(), operand2: imm_16.clone() };
+    let operation = Operation::Add {
+        destination: r0.clone(),
+        operand1: imm_42.clone(),
+        operand2: imm_16.clone(),
+    };
     executor.executer_operation(&operation, &mut local).ok();
 
-    let r0_value = executor.get_operand_value(&r0, &local).unwrap().get_constant().unwrap();
+    let r0_value = executor
+        .get_operand_value(&r0, &local)
+        .unwrap()
+        .get_constant()
+        .unwrap();
     assert_eq!(r0_value, 58);
 
     // test add with same operand and destination
-    let operation = Operation::Add { destination: r0.clone(), operand1: r0.clone(), operand2: imm_16.clone() };
+    let operation = Operation::Add {
+        destination: r0.clone(),
+        operand1: r0.clone(),
+        operand2: imm_16.clone(),
+    };
     executor.executer_operation(&operation, &mut local).ok();
 
-    let r0_value = executor.get_operand_value(&r0, &local).unwrap().get_constant().unwrap();
+    let r0_value = executor
+        .get_operand_value(&r0, &local)
+        .unwrap()
+        .get_constant()
+        .unwrap();
     assert_eq!(r0_value, 74);
 
     // test add with negative number
-    let operation = Operation::Add { destination: r0.clone(), operand1: imm_42.clone(), operand2: imm_minus70.clone() };
+    let operation = Operation::Add {
+        destination: r0.clone(),
+        operand1: imm_42.clone(),
+        operand2: imm_minus70.clone(),
+    };
     executor.executer_operation(&operation, &mut local).ok();
 
-    let r0_value = executor.get_operand_value(&r0, &local).unwrap().get_constant().unwrap();
+    let r0_value = executor
+        .get_operand_value(&r0, &local)
+        .unwrap()
+        .get_constant()
+        .unwrap();
     assert_eq!(r0_value, (-28i32 as u32) as u64);
 
     // test add overflow
-    let operation = Operation::Add { destination: r0.clone(), operand1: imm_42.clone(), operand2: imm_umax.clone() };
+    let operation = Operation::Add {
+        destination: r0.clone(),
+        operand1: imm_42.clone(),
+        operand2: imm_umax.clone(),
+    };
     executor.executer_operation(&operation, &mut local).ok();
 
-    let r0_value = executor.get_operand_value(&r0, &local).unwrap().get_constant().unwrap();
+    let r0_value = executor
+        .get_operand_value(&r0, &local)
+        .unwrap()
+        .get_constant()
+        .unwrap();
     assert_eq!(r0_value, 41);
 }
 
@@ -699,30 +775,62 @@ fn test_sub() {
     let imm_minus70 = Operand::Immidiate(DataWord::Word32(-70i32 as u32));
 
     // test simple sub
-    let operation = Operation::Sub { destination: r0.clone(), operand1: imm_42.clone(), operand2: imm_16.clone() };
+    let operation = Operation::Sub {
+        destination: r0.clone(),
+        operand1: imm_42.clone(),
+        operand2: imm_16.clone(),
+    };
     executor.executer_operation(&operation, &mut local).ok();
 
-    let r0_value = executor.get_operand_value(&r0, &local).unwrap().get_constant().unwrap();
+    let r0_value = executor
+        .get_operand_value(&r0, &local)
+        .unwrap()
+        .get_constant()
+        .unwrap();
     assert_eq!(r0_value, 26);
 
     // test sub with same operand and destination
-    let operation = Operation::Sub { destination: r0.clone(), operand1: r0.clone(), operand2: imm_16.clone() };
+    let operation = Operation::Sub {
+        destination: r0.clone(),
+        operand1: r0.clone(),
+        operand2: imm_16.clone(),
+    };
     executor.executer_operation(&operation, &mut local).ok();
 
-    let r0_value = executor.get_operand_value(&r0, &local).unwrap().get_constant().unwrap();
+    let r0_value = executor
+        .get_operand_value(&r0, &local)
+        .unwrap()
+        .get_constant()
+        .unwrap();
     assert_eq!(r0_value, 10);
 
     // test sub with negative number
-    let operation = Operation::Sub { destination: r0.clone(), operand1: imm_42.clone(), operand2: imm_minus70.clone() };
+    let operation = Operation::Sub {
+        destination: r0.clone(),
+        operand1: imm_42.clone(),
+        operand2: imm_minus70.clone(),
+    };
     executor.executer_operation(&operation, &mut local).ok();
 
-    let r0_value = executor.get_operand_value(&r0, &local).unwrap().get_constant().unwrap();
+    let r0_value = executor
+        .get_operand_value(&r0, &local)
+        .unwrap()
+        .get_constant()
+        .unwrap();
     assert_eq!(r0_value, 112);
 
     // test sub underflow
-    let operation = Operation::Sub { destination: r0.clone(), operand1: imm_42.clone(), operand2: imm_imin.clone() };
+    let operation = Operation::Sub {
+        destination: r0.clone(),
+        operand1: imm_42.clone(),
+        operand2: imm_imin.clone(),
+    };
     executor.executer_operation(&operation, &mut local).ok();
 
-    let r0_value = executor.get_operand_value(&r0, &local).unwrap().get_constant().unwrap();
+    let r0_value = executor
+        .get_operand_value(&r0, &local)
+        .unwrap()
+        .get_constant()
+        .unwrap();
     assert_eq!(r0_value, ((i32::MIN) as u32 + 42) as u64);
 }

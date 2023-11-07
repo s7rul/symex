@@ -1,14 +1,21 @@
 //! Describes a general assembly instruction.
 
-use super::DataWord;
+use super::{state::GAState, DataWord};
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
+pub enum CycleCount {
+    Value(usize),
+    Function(fn(state: &GAState) -> usize),
+}
+
+#[derive(Debug, Clone)]
 pub struct Instruction {
     pub instruction_size: u32,
     pub operations: Vec<Operation>,
+    pub max_cycle: CycleCount,
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub enum Operation {
     /// No operation
     Nop,

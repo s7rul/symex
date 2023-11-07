@@ -6,7 +6,8 @@ use armv6_m_instruction_parser::{
 };
 
 use crate::general_assembly::{
-    instruction::{Condition, Operand},
+    instruction::{Condition, CycleCount, Operand},
+    state::GAState,
     translator::Translator,
     DataWord,
 };
@@ -25,6 +26,7 @@ impl Translator for Instruction {
 
                 GAInstruction {
                     instruction_size: 16,
+                    max_cycle: CycleCount::Value(1),
                     operations: vec![
                         GAOperation::Adc {
                             destination: dest.clone(),
@@ -56,6 +58,7 @@ impl Translator for Instruction {
 
                 GAInstruction {
                     instruction_size: 16,
+                    max_cycle: CycleCount::Value(1),
                     operations: vec![
                         GAOperation::Move {
                             destination: op_local.clone(),
@@ -90,8 +93,11 @@ impl Translator for Instruction {
                 let m_local = Operand::Local("m".to_owned());
                 let n_local = Operand::Local("n".to_owned());
 
+                let max_cycle = if *d == Register::PC { 3 } else { 1 };
+
                 GAInstruction {
                     instruction_size: 16,
+                    max_cycle: CycleCount::Value(max_cycle),
                     operations: vec![
                         GAOperation::Move {
                             destination: m_local.clone(),
@@ -124,6 +130,7 @@ impl Translator for Instruction {
                 }
             }
             Operation::ADDImmSP { d, imm } => GAInstruction {
+                max_cycle: CycleCount::Value(1),
                 instruction_size: 16,
                 operations: vec![GAOperation::Add {
                     destination: arm_register_to_ga_operand(d),
@@ -132,6 +139,7 @@ impl Translator for Instruction {
                 }],
             },
             Operation::ADDRegSP { d, m } => GAInstruction {
+                max_cycle: CycleCount::Value(1),
                 instruction_size: 16,
                 operations: vec![GAOperation::Add {
                     destination: arm_register_to_ga_operand(d),
@@ -143,6 +151,7 @@ impl Translator for Instruction {
                 let imm = imm + 2;
                 GAInstruction {
                     instruction_size: 16,
+                    max_cycle: CycleCount::Value(1),
                     operations: vec![
                         GAOperation::Move {
                             destination: Operand::Local("addr".to_owned()),
@@ -163,6 +172,7 @@ impl Translator for Instruction {
             }
             Operation::ANDReg { m, dn } => GAInstruction {
                 instruction_size: 16,
+                max_cycle: CycleCount::Value(1),
                 operations: vec![
                     GAOperation::And {
                         destination: arm_register_to_ga_operand(dn),
@@ -175,6 +185,7 @@ impl Translator for Instruction {
             },
             Operation::ASRImm { imm, m, d } => GAInstruction {
                 instruction_size: 16,
+                max_cycle: CycleCount::Value(1),
                 operations: vec![
                     GAOperation::Move {
                         destination: Operand::Local("m".to_owned()),
@@ -201,6 +212,7 @@ impl Translator for Instruction {
 
                 GAInstruction {
                     instruction_size: 16,
+                    max_cycle: CycleCount::Value(1),
                     operations: vec![
                         GAOperation::Move {
                             destination: n_local.clone(),
@@ -227,8 +239,18 @@ impl Translator for Instruction {
             }
             Operation::B { cond, imm } => {
                 let imm = imm + 2; // Beacause arm always adds as a 32 bit instruction.
+
+                let max_cycle: fn(state: &GAState) -> usize = |state| {
+                    if state.get_has_jumped() {
+                        3
+                    } else {
+                        1
+                    }
+                };
+
                 GAInstruction {
                     instruction_size: 16,
+                    max_cycle: CycleCount::Function(max_cycle),
                     operations: vec![
                         GAOperation::Add {
                             destination: Operand::Local("new_pc".to_owned()),
@@ -248,6 +270,7 @@ impl Translator for Instruction {
 
                 GAInstruction {
                     instruction_size: 16,
+                    max_cycle: CycleCount::Value(1),
                     operations: vec![
                         GAOperation::Not {
                             destination: Operand::Local("mask".to_owned()),
@@ -262,10 +285,12 @@ impl Translator for Instruction {
                 }
             }
             Operation::BKPT { imm: _ } => GAInstruction {
+                max_cycle: CycleCount::Value(0), // ignore breakpoints for now
                 instruction_size: 16,
                 operations: vec![],
             },
             Operation::BL { imm } => GAInstruction {
+                max_cycle: CycleCount::Value(4),
                 instruction_size: 32,
                 operations: vec![
                     GAOperation::Move {
@@ -288,6 +313,7 @@ impl Translator for Instruction {
                 ],
             },
             Operation::BLXReg { m } => GAInstruction {
+                max_cycle: CycleCount::Value(3),
                 instruction_size: 16,
                 operations: vec![
                     GAOperation::Move {
@@ -305,6 +331,7 @@ impl Translator for Instruction {
                 let destination = arm_register_to_ga_operand(&Register::PC);
                 GAInstruction {
                     instruction_size: 16,
+                    max_cycle: CycleCount::Value(3),
                     operations: vec![GAOperation::Move {
                         destination,
                         source: reg,
@@ -316,6 +343,7 @@ impl Translator for Instruction {
                 let n = arm_register_to_ga_operand(n);
                 GAInstruction {
                     instruction_size: 16,
+                    max_cycle: CycleCount::Value(1),
                     operations: vec![
                         GAOperation::Add {
                             destination: Operand::Local("result".to_owned()),
@@ -344,6 +372,7 @@ impl Translator for Instruction {
                 let op_imm = Operand::Immidiate(DataWord::Word32(*imm));
                 GAInstruction {
                     instruction_size: 16,
+                    max_cycle: CycleCount::Value(1),
                     operations: vec![
                         GAOperation::Sub {
                             destination: Operand::Local("result".to_owned()),
@@ -372,6 +401,7 @@ impl Translator for Instruction {
                 let op_m = arm_register_to_ga_operand(m);
                 GAInstruction {
                     instruction_size: 16,
+                    max_cycle: CycleCount::Value(1),
                     operations: vec![
                         GAOperation::Sub {
                             destination: Operand::Local("result".to_owned()),
@@ -400,6 +430,7 @@ impl Translator for Instruction {
                 // in armv6-m it is only used to enable disable interupts
                 GAInstruction {
                     instruction_size: 16,
+                    max_cycle: CycleCount::Value(1),
                     operations: vec![],
                 }
             }
@@ -411,6 +442,7 @@ impl Translator for Instruction {
                 // data barier do nothig as data barier is not modeled yet
                 GAInstruction {
                     instruction_size: 32,
+                    max_cycle: CycleCount::Value(4),
                     operations: vec![],
                 }
             }
@@ -418,6 +450,7 @@ impl Translator for Instruction {
                 // data barier do nothig as data barier is not modeled yet
                 GAInstruction {
                     instruction_size: 32,
+                    max_cycle: CycleCount::Value(4),
                     operations: vec![],
                 }
             }
@@ -425,6 +458,7 @@ impl Translator for Instruction {
                 let dn = arm_register_to_ga_operand(dn);
                 GAInstruction {
                     instruction_size: 16,
+                    max_cycle: CycleCount::Value(1),
                     operations: vec![
                         GAOperation::Xor {
                             destination: dn.clone(),
@@ -440,10 +474,12 @@ impl Translator for Instruction {
                 // flushes pipeline do nothig as pipeline is not modeled
                 GAInstruction {
                     instruction_size: 32,
+                    max_cycle: CycleCount::Value(4),
                     operations: vec![],
                 }
             }
             Operation::LDM { n, reg_list } => {
+                let max_cycle = 1 + reg_list.len();
                 let mut operations: Vec<GAOperation> = vec![GAOperation::Move {
                     destination: Operand::Local("Address".to_owned()),
                     source: arm_register_to_ga_operand(n),
@@ -471,11 +507,13 @@ impl Translator for Instruction {
 
                 GAInstruction {
                     instruction_size: 16,
+                    max_cycle: CycleCount::Value(max_cycle),
                     operations,
                 }
             }
             Operation::LDRImm { imm, n, t } => GAInstruction {
                 instruction_size: 16,
+                max_cycle: CycleCount::Value(2),
                 operations: vec![
                     GAOperation::Add {
                         destination: Operand::Local("addr".to_owned()),
@@ -490,6 +528,7 @@ impl Translator for Instruction {
             },
             Operation::LDRLiteral { t, imm } => GAInstruction {
                 instruction_size: 16,
+                max_cycle: CycleCount::Value(2),
                 operations: vec![
                     GAOperation::And {
                         destination: Operand::Local("addr".to_owned()),
@@ -509,6 +548,7 @@ impl Translator for Instruction {
             },
             Operation::LDRReg { m, n, t } => GAInstruction {
                 instruction_size: 16,
+                max_cycle: CycleCount::Value(2),
                 operations: vec![
                     GAOperation::Add {
                         destination: Operand::Local("addr".to_owned()),
@@ -523,6 +563,7 @@ impl Translator for Instruction {
             },
             Operation::LDRBImm { imm, n, t } => GAInstruction {
                 instruction_size: 16,
+                max_cycle: CycleCount::Value(2),
                 operations: vec![
                     GAOperation::Add {
                         destination: Operand::Local("addr".to_owned()),
@@ -542,6 +583,7 @@ impl Translator for Instruction {
             },
             Operation::LDRBReg { m, n, t } => GAInstruction {
                 instruction_size: 16,
+                max_cycle: CycleCount::Value(2),
                 operations: vec![
                     GAOperation::Add {
                         destination: Operand::Local("addr".to_owned()),
@@ -561,6 +603,7 @@ impl Translator for Instruction {
             },
             Operation::LDRHImm { imm, n, t } => GAInstruction {
                 instruction_size: 16,
+                max_cycle: CycleCount::Value(2),
                 operations: vec![
                     GAOperation::Add {
                         destination: Operand::Local("addr".to_owned()),
@@ -580,6 +623,7 @@ impl Translator for Instruction {
             },
             Operation::LDRHReg { m, n, t } => GAInstruction {
                 instruction_size: 16,
+                max_cycle: CycleCount::Value(2),
                 operations: vec![
                     GAOperation::Add {
                         destination: Operand::Local("addr".to_owned()),
@@ -599,6 +643,7 @@ impl Translator for Instruction {
             },
             Operation::LDRSBReg { m, n, t } => GAInstruction {
                 instruction_size: 16,
+                max_cycle: CycleCount::Value(2),
                 operations: vec![
                     GAOperation::Add {
                         destination: Operand::Local("addr".to_owned()),
@@ -618,6 +663,7 @@ impl Translator for Instruction {
             },
             Operation::LDRSH { m, n, t } => GAInstruction {
                 instruction_size: 16,
+                max_cycle: CycleCount::Value(2),
                 operations: vec![
                     GAOperation::Add {
                         destination: Operand::Local("addr".to_owned()),
@@ -637,6 +683,7 @@ impl Translator for Instruction {
             },
             Operation::LSLImm { imm, m, d } => GAInstruction {
                 instruction_size: 16,
+                max_cycle: CycleCount::Value(1),
                 operations: vec![
                     GAOperation::Sl {
                         destination: arm_register_to_ga_operand(d),
@@ -649,6 +696,7 @@ impl Translator for Instruction {
             },
             Operation::LSLReg { m, dn } => GAInstruction {
                 instruction_size: 16,
+                max_cycle: CycleCount::Value(1),
                 operations: vec![
                     GAOperation::And {
                         destination: Operand::Local("shift".to_owned()),
@@ -666,6 +714,7 @@ impl Translator for Instruction {
             },
             Operation::LSRImm { imm, m, d } => GAInstruction {
                 instruction_size: 16,
+                max_cycle: CycleCount::Value(1),
                 operations: vec![
                     GAOperation::Srl {
                         destination: arm_register_to_ga_operand(d),
@@ -678,6 +727,7 @@ impl Translator for Instruction {
             },
             Operation::LSRReg { m, dn } => GAInstruction {
                 instruction_size: 16,
+                max_cycle: CycleCount::Value(1),
                 operations: vec![
                     GAOperation::And {
                         destination: Operand::Local("shift".to_owned()),
@@ -699,6 +749,7 @@ impl Translator for Instruction {
 
                 GAInstruction {
                     instruction_size: 16,
+                    max_cycle: CycleCount::Value(1),
                     operations: vec![
                         GAOperation::Move {
                             destination: destination.clone(),
@@ -716,17 +767,21 @@ impl Translator for Instruction {
                     destination: destination.clone(),
                     source: source.clone(),
                 }];
+                let max_cycle = if *d == Register::PC { 3 } else { 1 };
+
                 if *set_flags {
                     operations.push(GAOperation::SetNFlag(destination.clone()));
                     operations.push(GAOperation::SetZFlag(destination));
                 }
                 GAInstruction {
                     instruction_size: 16,
+                    max_cycle: CycleCount::Value(max_cycle),
                     operations,
                 }
             }
             Operation::MRS { d, sysm } => GAInstruction {
                 instruction_size: 32,
+                max_cycle: CycleCount::Value(4),
                 operations: vec![GAOperation::Move {
                     destination: arm_register_to_ga_operand(d),
                     source: arm_special_register_to_operand(sysm),
@@ -734,6 +789,7 @@ impl Translator for Instruction {
             },
             Operation::MSRReg { n, sysm } => GAInstruction {
                 instruction_size: 32,
+                max_cycle: CycleCount::Value(4),
                 operations: vec![GAOperation::Move {
                     source: arm_register_to_ga_operand(n),
                     destination: arm_special_register_to_operand(sysm),
@@ -745,6 +801,7 @@ impl Translator for Instruction {
 
                 GAInstruction {
                     instruction_size: 16,
+                    max_cycle: CycleCount::Value(32), // Can be one depending on core implementation might be able to read this from somewhere.
                     operations: vec![
                         GAOperation::Mul {
                             destination: dm.clone(),
@@ -762,6 +819,7 @@ impl Translator for Instruction {
 
                 GAInstruction {
                     instruction_size: 16,
+                    max_cycle: CycleCount::Value(1),
                     operations: vec![
                         GAOperation::Not {
                             destination: d.clone(),
@@ -774,6 +832,7 @@ impl Translator for Instruction {
             }
             Operation::NOP => GAInstruction {
                 instruction_size: 16,
+                max_cycle: CycleCount::Value(1),
                 operations: vec![],
             },
             Operation::ORRReg { m, dn } => {
@@ -782,6 +841,7 @@ impl Translator for Instruction {
 
                 GAInstruction {
                     instruction_size: 16,
+                    max_cycle: CycleCount::Value(1),
                     operations: vec![
                         GAOperation::Or {
                             destination: dn.clone(),
@@ -794,6 +854,11 @@ impl Translator for Instruction {
                 }
             }
             Operation::POP { reg_list } => {
+                let max_cycle = if reg_list.contains(&Register::PC) {
+                    4
+                } else {
+                    1
+                } + reg_list.len();
                 let mut operations: Vec<GAOperation> = vec![];
                 // set up base address
                 operations.push(GAOperation::Move {
@@ -822,6 +887,7 @@ impl Translator for Instruction {
 
                 GAInstruction {
                     instruction_size: 16,
+                    max_cycle: CycleCount::Value(max_cycle),
                     operations,
                 }
             }
@@ -854,6 +920,7 @@ impl Translator for Instruction {
                 });
 
                 GAInstruction {
+                    max_cycle: CycleCount::Value(1 + reg_list.len()),
                     instruction_size: 16,
                     operations,
                 }
@@ -873,6 +940,7 @@ impl Translator for Instruction {
 
                 GAInstruction {
                     instruction_size: 16,
+                    max_cycle: CycleCount::Value(1),
                     operations: vec![
                         // set destination to 0
                         GAOperation::Move {
@@ -960,6 +1028,7 @@ impl Translator for Instruction {
 
                 GAInstruction {
                     instruction_size: 16,
+                    max_cycle: CycleCount::Value(1),
                     operations: vec![
                         // set destination to 0
                         GAOperation::Move {
@@ -1043,6 +1112,7 @@ impl Translator for Instruction {
 
                 GAInstruction {
                     instruction_size: 16,
+                    max_cycle: CycleCount::Value(1),
                     operations: vec![
                         // set destination to 0
                         GAOperation::Move {
@@ -1098,6 +1168,7 @@ impl Translator for Instruction {
                 let mask = Operand::Immidiate(DataWord::Word32(0xff));
                 GAInstruction {
                     instruction_size: 16,
+                    max_cycle: CycleCount::Value(1),
                     operations: vec![
                         GAOperation::And {
                             destination: shift.clone(),
@@ -1123,6 +1194,7 @@ impl Translator for Instruction {
 
                 GAInstruction {
                     instruction_size: 16,
+                    max_cycle: CycleCount::Value(1),
                     operations: vec![
                         GAOperation::Move {
                             destination: local_n.clone(),
@@ -1158,6 +1230,7 @@ impl Translator for Instruction {
 
                 GAInstruction {
                     instruction_size: 16,
+                    max_cycle: CycleCount::Value(1),
                     operations: vec![
                         GAOperation::Move {
                             destination: local_n.clone(),
@@ -1193,6 +1266,7 @@ impl Translator for Instruction {
                 // sends a hint event to all cores, multicore is not modeled so do nothing for now
                 GAInstruction {
                     instruction_size: 16,
+                    max_cycle: CycleCount::Value(1),
                     operations: vec![],
                 }
             }
@@ -1226,6 +1300,7 @@ impl Translator for Instruction {
 
                 GAInstruction {
                     instruction_size: 16,
+                    max_cycle: CycleCount::Value(1 + reg_list.len()),
                     operations,
                 }
             }
@@ -1238,6 +1313,7 @@ impl Translator for Instruction {
 
                 GAInstruction {
                     instruction_size: 16,
+                    max_cycle: CycleCount::Value(2),
                     operations: vec![
                         GAOperation::Add {
                             destination: addr.clone(),
@@ -1260,6 +1336,7 @@ impl Translator for Instruction {
 
                 GAInstruction {
                     instruction_size: 16,
+                    max_cycle: CycleCount::Value(2),
                     operations: vec![
                         GAOperation::Add {
                             destination: addr.clone(),
@@ -1282,6 +1359,7 @@ impl Translator for Instruction {
 
                 GAInstruction {
                     instruction_size: 16,
+                    max_cycle: CycleCount::Value(2),
                     operations: vec![
                         GAOperation::Add {
                             destination: addr.clone(),
@@ -1304,6 +1382,7 @@ impl Translator for Instruction {
 
                 GAInstruction {
                     instruction_size: 16,
+                    max_cycle: CycleCount::Value(2),
                     operations: vec![
                         GAOperation::Add {
                             destination: addr.clone(),
@@ -1326,6 +1405,7 @@ impl Translator for Instruction {
 
                 GAInstruction {
                     instruction_size: 16,
+                    max_cycle: CycleCount::Value(2),
                     operations: vec![
                         GAOperation::Add {
                             destination: addr.clone(),
@@ -1348,6 +1428,7 @@ impl Translator for Instruction {
 
                 GAInstruction {
                     instruction_size: 16,
+                    max_cycle: CycleCount::Value(2),
                     operations: vec![
                         GAOperation::Add {
                             destination: addr.clone(),
@@ -1369,6 +1450,7 @@ impl Translator for Instruction {
 
                 GAInstruction {
                     instruction_size: 16,
+                    max_cycle: CycleCount::Value(1),
                     operations: vec![
                         GAOperation::Move {
                             destination: local_n.clone(),
@@ -1404,6 +1486,7 @@ impl Translator for Instruction {
 
                 GAInstruction {
                     instruction_size: 16,
+                    max_cycle: CycleCount::Value(1),
                     operations: vec![
                         GAOperation::Move {
                             destination: local_n.clone(),
@@ -1433,6 +1516,7 @@ impl Translator for Instruction {
             }
             Operation::SUBImmSP { imm } => GAInstruction {
                 instruction_size: 16,
+                max_cycle: CycleCount::Value(1),
                 operations: vec![GAOperation::Sub {
                     destination: Operand::Register("SP".to_owned()),
                     operand1: Operand::Register("SP".to_owned()),
@@ -1444,6 +1528,7 @@ impl Translator for Instruction {
                 // this functionality is not modeled so do nothing
                 GAInstruction {
                     instruction_size: 16,
+                    max_cycle: CycleCount::Value(0), // depend on config do not count it for now
                     operations: vec![],
                 }
             }
@@ -1453,6 +1538,7 @@ impl Translator for Instruction {
 
                 GAInstruction {
                     instruction_size: 16,
+                    max_cycle: CycleCount::Value(1),
                     operations: vec![GAOperation::SignExtend {
                         destination: d,
                         operand: m,
@@ -1466,6 +1552,7 @@ impl Translator for Instruction {
 
                 GAInstruction {
                     instruction_size: 16,
+                    max_cycle: CycleCount::Value(1),
                     operations: vec![GAOperation::SignExtend {
                         destination: d,
                         operand: m,
@@ -1480,6 +1567,7 @@ impl Translator for Instruction {
 
                 GAInstruction {
                     instruction_size: 16,
+                    max_cycle: CycleCount::Value(1),
                     operations: vec![
                         GAOperation::And {
                             destination: result.clone(),
@@ -1501,6 +1589,7 @@ impl Translator for Instruction {
             }
             Operation::UXTB { m, d } => GAInstruction {
                 instruction_size: 16,
+                max_cycle: CycleCount::Value(1),
                 operations: vec![GAOperation::ZeroExtend {
                     destination: arm_register_to_ga_operand(d),
                     operand: arm_register_to_ga_operand(m),
@@ -1509,6 +1598,7 @@ impl Translator for Instruction {
             },
             Operation::UXTH { m, d } => GAInstruction {
                 instruction_size: 16,
+                max_cycle: CycleCount::Value(1),
                 operations: vec![GAOperation::ZeroExtend {
                     destination: arm_register_to_ga_operand(d),
                     operand: arm_register_to_ga_operand(m),

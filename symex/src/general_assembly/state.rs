@@ -31,11 +31,13 @@ pub struct GAState {
     pub constraints: DSolver,
     pub marked_symbolic: Vec<Variable>,
     pub memory: ArrayMemory,
-    pub cycle_count: u128,
+    pub cycle_count: usize,
+    pub last_instruction: Option<Instruction>,
     pub registers: HashMap<String, DExpr>,
     pc_register: u64, // this register is special
     flags: HashMap<String, DExpr>,
     instruction_counter: usize,
+    has_jumped: bool,
 }
 
 impl GAState {
@@ -90,20 +92,59 @@ impl GAState {
             pc_register: pc_reg,
             flags,
             instruction_counter: 0,
+            has_jumped: false,
+            last_instruction: None,
         })
+    }
+
+    pub fn reset_has_jumped(&mut self) {
+        self.has_jumped = false;
+    }
+
+    pub fn set_has_jumped(&mut self) {
+        self.has_jumped = true;
+    }
+
+    /// Indicates if the last executed instruction has a conditional branch that branched.
+    pub fn get_has_jumped(&self) -> bool {
+        self.has_jumped
     }
 
     /// Increments the instruction counter by one.
     pub fn increment_instruction_count(&mut self) {
         self.instruction_counter += 1;
     }
-    
+
     /// Gets the current instruction count
     pub fn get_instruction_count(&self) -> usize {
         self.instruction_counter
     }
 
-    pub fn create_test_state(project: &'static Project, ctx: &'static DContext, constraints: DSolver, start_pc: u64, start_stack: u64) -> Self {
+    pub fn increment_cycle_count(&mut self) {
+        let cycles = match &self.last_instruction {
+            Some(i) => {
+                match i.max_cycle {
+                    super::instruction::CycleCount::Value(v) => v,
+                    super::instruction::CycleCount::Function(f) => f(self),
+                }
+            },
+            None => 0,
+        };
+        trace!("Incrementing cycles: {}, for {:?}", cycles, self.last_instruction);
+        self.cycle_count += cycles;
+    }
+
+    pub fn set_last_instruction(&mut self, instruction: Instruction) {
+        self.last_instruction = Some(instruction);
+    }
+
+    pub fn create_test_state(
+        project: &'static Project,
+        ctx: &'static DContext,
+        constraints: DSolver,
+        start_pc: u64,
+        start_stack: u64,
+    ) -> Self {
         let pc_reg = start_pc;
         let ptr_size = project.get_ptr_size();
 
@@ -135,6 +176,8 @@ impl GAState {
             pc_register: pc_reg,
             flags,
             instruction_counter: 0,
+            has_jumped: false,
+            last_instruction: None,
         }
     }
 

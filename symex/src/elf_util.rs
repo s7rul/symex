@@ -32,6 +32,9 @@ pub struct VisualPathResult {
 
     /// The number of instructions executed in the path
     pub instruction_count: usize,
+
+    /// the maximum number of clock cycles the path can contain
+    pub max_cycles: usize,
 }
 
 fn elf_get_values<'a, I>(vars: I, state: &GAState) -> Result<Vec<Variable>, GAError>
@@ -75,7 +78,8 @@ impl VisualPathResult {
             result,
             symbolics,
             end_state,
-            instruction_count: state.get_instruction_count()
+            instruction_count: state.get_instruction_count(),
+            max_cycles: state.cycle_count,
         })
     }
 }
@@ -123,8 +127,14 @@ impl fmt::Display for VisualPathResult {
                 writeln!(indented(f), "{name}: {}", value)?;
             }
         }
-        
-        writeln!(f, "Instructions executed in path: {}", self.instruction_count)?;
+
+        writeln!(
+            f,
+            "Instructions executed: {}",
+            self.instruction_count
+        )?;
+
+        writeln!(f, "Max number of cycles: {}", self.max_cycles)?;
 
         Ok(())
     }
