@@ -44,7 +44,7 @@ pub fn construct_pc_hooks<R: Reader>(
         }
     }
     if found_hooks.len() < hooks.len() {
-        panic!() // fix a proper error here later
+        println!("Did not find addresses for all hooks.") // fix a proper error here later
     }
     ret
 }

@@ -122,15 +122,17 @@ impl GAState {
 
     pub fn increment_cycle_count(&mut self) {
         let cycles = match &self.last_instruction {
-            Some(i) => {
-                match i.max_cycle {
-                    super::instruction::CycleCount::Value(v) => v,
-                    super::instruction::CycleCount::Function(f) => f(self),
-                }
+            Some(i) => match i.max_cycle {
+                super::instruction::CycleCount::Value(v) => v,
+                super::instruction::CycleCount::Function(f) => f(self),
             },
             None => 0,
         };
-        trace!("Incrementing cycles: {}, for {:?}", cycles, self.last_instruction);
+        trace!(
+            "Incrementing cycles: {}, for {:?}",
+            cycles,
+            self.last_instruction
+        );
         self.cycle_count += cycles;
     }
 
@@ -243,7 +245,7 @@ impl GAState {
             Condition::GE => {
                 let n = self.get_flag("N".to_owned()).unwrap();
                 let v = self.get_flag("V".to_owned()).unwrap();
-                n._eq(&v)
+                n.xor(&v).not()
             }
             Condition::LT => {
                 let n = self.get_flag("N".to_owned()).unwrap();

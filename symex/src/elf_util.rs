@@ -128,11 +128,7 @@ impl fmt::Display for VisualPathResult {
             }
         }
 
-        writeln!(
-            f,
-            "Instructions executed: {}",
-            self.instruction_count
-        )?;
+        writeln!(f, "Instructions executed: {}", self.instruction_count)?;
 
         writeln!(f, "Max number of cycles: {}", self.max_cycles)?;
 

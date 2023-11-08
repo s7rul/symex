@@ -12,8 +12,10 @@ pub static BOOT_LOADER: [u8; 256] = rp2040_boot2::BOOT_LOADER_W25Q080;
 use defmt::*;
 use defmt_rtt as _;
 use embedded_hal::digital::v2::OutputPin;
-use panic_probe as _;
-//use panic_halt as _;
+//use panic_probe as _;
+use panic_halt as _;
+
+use core::arch::asm;
 
 use rp2040_boot2;
 use rp2040_hal as hal;
@@ -85,6 +87,16 @@ fn test_assume(n: u8) -> u8 {
 
 #[inline(never)]
 #[no_mangle]
+fn nop_loop() {
+    for _ in 0..10000 {
+        unsafe {
+            asm!("nop");
+        }
+    }
+}
+
+#[inline(never)]
+#[no_mangle]
 fn test_simple_if(n: u8) -> u8 {
     if n == 3 {
         1
@@ -118,7 +130,7 @@ fn run_function(f: fn(u8) -> u8) {
 fn main() -> ! {
     info!("Program start");
     let mut pac = pac::Peripherals::take().unwrap();
-    let core = pac::CorePeripherals::take().unwrap();
+    let mut core = pac::CorePeripherals::take().unwrap();
     let mut watchdog = Watchdog::new(pac.WATCHDOG);
     let sio = Sio::new(pac.SIO);
 
@@ -143,6 +155,7 @@ fn main() -> ! {
     run_function(panic_test_core);
     run_function(panic_test_defmt);
     run_function(test_assume);
+    nop_loop();
     simple_loop_llvm();
     test_assume_llvm();
     loop {}
