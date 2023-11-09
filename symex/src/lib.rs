@@ -1,9 +1,13 @@
 pub mod elf_util;
 pub mod general_assembly;
 pub mod memory;
-pub mod run;
+#[cfg(not(feature = "llvm"))]
+pub mod run_elf;
+#[cfg(feature = "llvm")]
+pub mod run_llvm;
 pub mod smt;
 pub mod util;
+#[cfg(feature = "llvm")]
 pub mod vm;
 
 pub(crate) const MAX_INTRINSIC_CONCRETIZATIONS: usize = 50;

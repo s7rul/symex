@@ -2,6 +2,7 @@ use anyhow::{anyhow, Result};
 use clap::Parser;
 use log::debug;
 use std::{fs, path::PathBuf};
+#[cfg(feature = "llvm")]
 use symex::run::{self, RunConfig, SolveFor};
 use tracing_subscriber;
 
@@ -48,13 +49,15 @@ fn run() -> Result<()> {
     let args = Args::parse_from(args);
 
     // maybe  hacky look into later
+    #[cfg(not(feature = "llvm"))]
     match args.elf {
         Some(_) => {
             return run_elf(args);
         }
-        None => (),
+        None => Ok(()),
     }
 
+    #[cfg(feature = "llvm")]
     match args.subcommand {
         Some(subcommand) => match subcommand {
             Subcommands::C(clang_args) => run_c(clang_args),
@@ -63,6 +66,7 @@ fn run() -> Result<()> {
     }
 }
 
+#[cfg(not(feature = "llvm"))]
 fn run_elf(args: Args) -> Result<()> {
     debug!("Run elf file.");
     let path = match args.elf {
@@ -75,17 +79,18 @@ fn run_elf(args: Args) -> Result<()> {
     };
     debug!("Starting analasys on target: {path}, function: {function_name}");
 
-    let cfg = RunConfig {
-        solve_inputs: true,
-        solve_symbolics: true,
-        solve_output: true,
-        solve_for: symex::run::SolveFor::All,
-    };
+    // let cfg = RunConfig {
+    //     solve_inputs: true,
+    //     solve_symbolics: true,
+    //     solve_output: true,
+    //     solve_for: symex::run::SolveFor::All,
+    // };
 
-    symex::run::run_elf(&path, &function_name, &cfg)?;
+    symex::run_elf::run_elf(&path, &function_name)?;
     Ok(())
 }
 
+#[cfg(feature = "llvm")]
 fn run_rs(args: Args) -> Result<()> {
     let opts = settings_from_args(&args);
 

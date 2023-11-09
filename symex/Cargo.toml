@@ -4,7 +4,7 @@ version = "0.1.0"
 edition = "2021"
 
 [dependencies]
-llvm-ir = { path = "../crates/llvm-ir", version = "*" }
+llvm-ir = { path = "../crates/llvm-ir", version = "*", optional = true }
 anyhow = "1.0"
 thiserror = "1.0"
 rustc-demangle = "0.1.21"
@@ -20,3 +20,7 @@ object = "0.32.1"
 
 armv6-m-instruction-parser = "0.1"
 gimli = "0.28.0"
+
+[features]
+# Defines a feature named `llvm` that enables symbolic execution at LLVM-IR level
+llvm = ["llvm-ir"]
