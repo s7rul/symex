@@ -108,6 +108,16 @@ fn test_simple_if(n: u8) -> u8 {
 }
 
 #[inline(never)]
+#[no_mangle]
+fn test_simple_bool(n: bool) -> u8 {
+    if n {
+        1
+    } else {
+        5
+    }
+}
+
+#[inline(never)]
 fn test_assume_llvm() -> u8 {
     let n = any();
     test_assume(n)
@@ -155,6 +165,9 @@ fn main() -> ! {
     run_function(panic_test_core);
     run_function(panic_test_defmt);
     run_function(test_assume);
+    //run_function(test_simple_bool);
+    let n = test_simple_bool(true);
+    info!("n: {}", n);
     nop_loop();
     simple_loop_llvm();
     test_assume_llvm();
