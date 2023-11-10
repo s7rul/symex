@@ -73,6 +73,16 @@ pub enum DataHalfWord {
     HalfWord16(u8),
 }
 
+impl Into<DataWord> for DataHalfWord {
+    fn into(self) -> DataWord {
+        match self {
+            DataHalfWord::HalfWord64(v) => DataWord::Word64(v as u64),
+            DataHalfWord::HalfWord32(v) => DataWord::Word32(v as u32),
+            DataHalfWord::HalfWord16(v) => DataWord::Word16(v as u16),
+        }
+    }
+}
+
 #[derive(Debug, Clone)]
 pub enum Endianness {
     Little,
