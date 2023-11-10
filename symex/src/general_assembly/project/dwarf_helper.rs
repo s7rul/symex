@@ -9,6 +9,10 @@ use tracing::trace;
 
 use super::{PCHook, PCHooks};
 
+/// Constructs a list of address hook pairs from a list of symbol name hook pairs.
+/// 
+/// It does this by finding the name of the symbol in the dwarf debug data and if it is a function(subprogram)
+/// it adds the address and hook to the hooks list.
 pub fn construct_pc_hooks<R: Reader>(
     hooks: Vec<(&str, PCHook)>,
     pub_names: &DebugPubNames<R>,

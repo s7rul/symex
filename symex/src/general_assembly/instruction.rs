@@ -2,19 +2,33 @@
 
 use super::{state::GAState, DataWord};
 
+/// Representing a cycle count for a instruction.
 #[derive(Debug, Clone)]
 pub enum CycleCount {
+    /// Cycle count is a precalculated value
     Value(usize),
+
+    /// Cycle count depends on execution state
     Function(fn(state: &GAState) -> usize),
 }
 
+/// Represents a general assembly instruction.
 #[derive(Debug, Clone)]
 pub struct Instruction {
+    /// The size of the original machine instruction in number of bits.
     pub instruction_size: u32,
+
+    /// A list of operations that will be executed in order when
+    /// executing the instruction.
     pub operations: Vec<Operation>,
+
+    /// The maximum number of cycles the instruction will take.
+    /// This can depend on state and will be evaluated after the
+    /// instruction has executed but before the next instruction.
     pub max_cycle: CycleCount,
 }
 
+/// Represents a single operation
 #[derive(Debug, Clone)]
 pub enum Operation {
     /// No operation
@@ -114,6 +128,9 @@ pub enum Operation {
         shift: Operand,
     },
 
+    /// Rotating shift right
+    /// Rotate the `operand` `shift` number of steps
+    /// and store the result in `destination`.
     Sror {
         destination: Operand,
         operand: Operand,
@@ -121,7 +138,7 @@ pub enum Operation {
     },
 
     /// Zero extend
-    /// Zero exstends bits bits from operand and stores it in destination.
+    /// Zero extends `bits` bits from operand and stores it in destination..
     ZeroExtend {
         destination: Operand,
         operand: Operand,
@@ -185,36 +202,78 @@ pub enum Operation {
 
 #[derive(Debug, PartialEq, Clone, Copy)]
 pub enum Condition {
-    /// Equal
+    /// Equal Z = 1
     EQ,
 
-    /// Not Equal
+    /// Not Equal Z = 0
     NE,
+
+    /// Carry set C = 1
     CS,
+    
+    /// Carry clear C = 0
     CC,
+
+    /// Negative N = 1
     MI,
+
+    /// Positive or zero N = 0
     PL,
+
+    /// Overflow V = 1
     VS,
+
+    /// No overflow V = 0
     VC,
+
+    /// Unsigned higher C = 1 AND Z = 0
     HI,
+
+    /// Unsigned lower or equal C = 0 OR Z = 1
     LS,
+
+    /// Signed higher or equal N = V
     GE,
+
+    /// Signed lower N != V
     LT,
+
+    /// Signed higher Z = 0 AND N = V
     GT,
+
+    /// Signed lower or equal Z = 1 OR N != V
     LE,
+
+    /// No condition always true
     None,
 }
 
+/// A operand representing some value.
 #[derive(Debug, Clone)]
 pub enum Operand {
+    /// Representing a value in a register.
     Register(String),
+
+    /// Representing an immediate value.
     Immidiate(DataWord),
+
+    /// Representing the value stored in memory
+    /// at the address stored in a local.
     AddressInLocal(String, u32),
+
+    /// Representing the value stored in memory
+    /// at the constant address.
     Address(DataWord, u32),
+
+    /// Representing the value stored in memory
+    /// at the address stored in a register offset
+    /// by an constant value.
     AddressWithOffset {
         address: DataWord,
         offset_reg: String,
         width: u32,
     },
+
+    /// Represent the value that is local to the instruction.
     Local(String),
 }

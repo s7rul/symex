@@ -38,6 +38,8 @@ struct AddWithCarryResult {
 }
 
 impl<'vm> GAExecutor<'vm> {
+
+    /// Construct a executor from a state.
     pub fn from_state(state: GAState, vm: &'vm mut VM, project: &'static Project) -> Self {
         Self { vm, state, project }
     }
@@ -77,6 +79,7 @@ impl<'vm> GAExecutor<'vm> {
         }
     }
 
+    // Fork execution. Will create a new path with `constraint`.
     fn fork(&mut self, constraint: DExpr) -> Result<()> {
         trace!("Save backtracking path: constraint={:?}", constraint);
         let forked_state = self.state.clone();
@@ -86,6 +89,7 @@ impl<'vm> GAExecutor<'vm> {
         Ok(())
     }
 
+    /// Creates smt expression from a dataword.
     fn get_dexpr_from_dataword(&mut self, data: DataWord) -> DExpr {
         match data {
             DataWord::Word64(v) => self.state.ctx.from_u64(v, 64),
@@ -95,7 +99,8 @@ impl<'vm> GAExecutor<'vm> {
         }
     }
 
-    fn get_memmory(&mut self, address: &DExpr, bits: u32) -> Result<DExpr> {
+    /// Retrieves a smt expression representing value stored at `address` in memory.
+    fn get_memory(&mut self, address: &DExpr, bits: u32) -> Result<DExpr> {
         trace!("Getting memmory addr: {:?}", address);
         match address.get_constant() {
             Some(const_addr) => {
@@ -129,7 +134,8 @@ impl<'vm> GAExecutor<'vm> {
         }
     }
 
-    fn set_memmory(&mut self, data: DExpr, address: &DExpr, bits: u32) -> Result<()> {
+    /// Sets the memory at `address` to `data`.
+    fn set_memory(&mut self, data: DExpr, address: &DExpr, bits: u32) -> Result<()> {
         trace!("Setting memmory addr: {:?}", address);
         match address.get_constant() {
             Some(const_addr) => {
@@ -151,6 +157,7 @@ impl<'vm> GAExecutor<'vm> {
         }
     }
 
+    /// Get the smt expression for a operand.
     fn get_operand_value(
         &mut self,
         operand: &Operand,
@@ -177,7 +184,7 @@ impl<'vm> GAExecutor<'vm> {
             Operand::Immidiate(v) => Ok(self.get_dexpr_from_dataword(v.to_owned())),
             Operand::Address(address, width) => {
                 let address = &self.get_dexpr_from_dataword(*address);
-                self.get_memmory(address, *width)
+                self.get_memory(address, *width)
             }
             Operand::AddressWithOffset {
                 address: _,
@@ -188,11 +195,12 @@ impl<'vm> GAExecutor<'vm> {
             Operand::AddressInLocal(local_name, width) => {
                 let address =
                     self.get_operand_value(&Operand::Local(local_name.to_owned()), local)?;
-                self.get_memmory(&address, *width)
+                self.get_memory(&address, *width)
             }
         }
     }
 
+    /// Sets what the operand represents to `value`.
     fn set_operand_value(
         &mut self,
         operand: &Operand,
@@ -208,11 +216,11 @@ impl<'vm> GAExecutor<'vm> {
             Operand::AddressInLocal(local_name, width) => {
                 let address =
                     self.get_operand_value(&Operand::Local(local_name.to_owned()), local)?;
-                self.set_memmory(value, &address, *width)?;
+                self.set_memory(value, &address, *width)?;
             }
             Operand::Address(address, width) => {
                 let address = self.get_dexpr_from_dataword(*address);
-                self.set_memmory(value, &address, *width)?;
+                self.set_memory(value, &address, *width)?;
             }
             Operand::AddressWithOffset {
                 address: _,
@@ -226,6 +234,7 @@ impl<'vm> GAExecutor<'vm> {
         Ok(())
     }
 
+    /// Execute a single instruction.
     fn execute_instruction(&mut self, i: &Instruction) -> Result<()> {
         // Always increment pc before executing the operations
         let new_pc = self.state.get_register("PC".to_owned()).unwrap();
@@ -255,6 +264,7 @@ impl<'vm> GAExecutor<'vm> {
         Ok(())
     }
 
+    /// Execute a single operation or all operations contained inside a operation.
     fn executer_operation(
         &mut self,
         operation: &Operation,
@@ -448,13 +458,17 @@ impl<'vm> GAExecutor<'vm> {
                 let op1 = self.get_operand_value(operand1, &local)?;
                 let op2 = self.get_operand_value(operand2, &local)?;
                 let one = self.state.ctx.from_u64(1, self.project.get_word_size());
-                // not correct todo fix
 
                 let result = match (sub, carry) {
                     (true, true) => {
+                        // I do not now if this part is used in any ISA but it is here for completeness.
                         let carry_in = self.state.get_flag("C".to_owned()).unwrap();
                         let op2 = op2.not();
+
+                        // Check for carry on twos complement of op2
+                        // Fixes edgecase op2 = 0.
                         let c2 = op2.uaddo(&one);
+
                         add_with_carry(
                             &op1,
                             &op2.add(&one),
@@ -607,6 +621,7 @@ impl<'vm> GAExecutor<'vm> {
     }
 }
 
+/// Does a add with carry and returns result, carry out and overflow like a hw adder.
 fn add_with_carry(
     op1: &DExpr,
     op2: &DExpr,
