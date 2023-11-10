@@ -3,7 +3,7 @@
 
 use super::instruction::Instruction;
 
-/// A translator 
+/// A translator
 pub trait Translatable {
     fn translate(&self) -> Instruction;
 }
