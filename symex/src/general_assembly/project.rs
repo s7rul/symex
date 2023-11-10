@@ -174,6 +174,10 @@ impl Project {
         self.get_ptr_size() // same for now
     }
 
+    pub fn get_endianness(&self) -> Endianness {
+        self.endianness.clone()
+    }
+
     pub fn get_ptr_size(&self) -> u32 {
         // This is an oversimplification and not true for some architectures
         // But will do and should map to the addresses in the elf

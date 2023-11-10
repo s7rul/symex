@@ -63,7 +63,7 @@ impl GAState {
         }?;
         debug!("Found stack start at addr: {:#X}.", sp_reg);
 
-        let memory = ArrayMemory::new(ctx, ptr_size);
+        let memory = ArrayMemory::new(ctx, ptr_size, project.get_endianness());
         let mut registers = HashMap::new();
         let pc_expr = ctx.from_u64(pc_reg, ptr_size);
         registers.insert("PC".to_owned(), pc_expr);
@@ -153,7 +153,7 @@ impl GAState {
         let sp_reg = start_stack;
         debug!("Found stack start at addr: {:#X}.", sp_reg);
 
-        let memory = ArrayMemory::new(ctx, ptr_size);
+        let memory = ArrayMemory::new(ctx, ptr_size, project.get_endianness());
         let mut registers = HashMap::new();
         let pc_expr = ctx.from_u64(pc_reg, ptr_size);
         registers.insert("PC".to_owned(), pc_expr);

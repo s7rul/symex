@@ -73,7 +73,7 @@ pub enum DataHalfWord {
     HalfWord16(u8),
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub enum Endianness {
     Little,
     Big,

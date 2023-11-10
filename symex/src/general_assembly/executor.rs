@@ -445,8 +445,14 @@ impl<'vm> GAExecutor<'vm> {
                         let carry_in = self.state.get_flag("C".to_owned()).unwrap();
                         let op2 = op2.not();
                         let c2 = op2.uaddo(&one);
-                        add_with_carry(&op1, &op2.add(&one), &carry_in, self.project.get_word_size())
-                            .carry_out.or(&c2)
+                        add_with_carry(
+                            &op1,
+                            &op2.add(&one),
+                            &carry_in,
+                            self.project.get_word_size(),
+                        )
+                        .carry_out
+                        .or(&c2)
                     }
                     (true, false) => {
                         add_with_carry(&op1, &op2.not(), &one, self.project.get_word_size())
@@ -636,7 +642,10 @@ fn test_add_with_carry() {
 
     // signed sub negative result
     let result = add_with_carry(&num16, &num42.not(), &one_bool, 32);
-    assert_eq!(result.result.get_constant().unwrap(), (-26i32 as u32) as u64);
+    assert_eq!(
+        result.result.get_constant().unwrap(),
+        (-26i32 as u32) as u64
+    );
     assert!(!result.carry_out.get_constant_bool().unwrap());
     assert!(!result.overflow.get_constant_bool().unwrap());
 

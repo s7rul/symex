@@ -10,17 +10,14 @@
 //! it may provide better performance in certain situations.
 use tracing::trace;
 
-use crate::smt::{DArray, DContext, DExpr};
+use crate::{
+    general_assembly::Endianness,
+    smt::{DArray, DContext, DExpr},
+};
 
 use super::{MemoryError, BITS_IN_BYTE};
 
-/// Allocations and backing memory store.
-///
-/// Memory keeps track of all allocations and provides the backing memory store. All allocations
-/// are tagged with an id. This allows checking for out of bounds reads.
-///
-/// With `null_detection` enabled this allows to to check for the possibility of the address being
-/// null.
+/// Memory store backed by smt array
 #[derive(Debug, Clone)]
 pub struct ArrayMemory {
     /// Reference to the context so new symbols can be created.
@@ -31,6 +28,9 @@ pub struct ArrayMemory {
 
     /// The actual memory. Stores all values written to memory.
     memory: DArray,
+
+    /// Memory endianess
+    endianness: Endianness,
 }
 
 impl ArrayMemory {
@@ -59,13 +59,14 @@ impl ArrayMemory {
     }
 
     /// Creates a new memory containing only uninitialized memory.
-    pub fn new(ctx: &'static DContext, ptr_size: u32) -> Self {
+    pub fn new(ctx: &'static DContext, ptr_size: u32, endianness: Endianness) -> Self {
         let memory = DArray::new(&ctx, ptr_size as usize, BITS_IN_BYTE as usize, "memory");
 
         Self {
             ctx,
             ptr_size,
             memory,
+            endianness,
         }
     }
 
@@ -92,6 +93,7 @@ impl ArrayMemory {
             let num_bytes = bits / BITS_IN_BYTE;
 
             let mut bytes = Vec::new();
+
             for byte in 0..num_bytes {
                 let offset = self.ctx.from_u64(byte as u64, ptr_size);
                 let read_addr = addr.add(&offset);
@@ -99,7 +101,14 @@ impl ArrayMemory {
                 bytes.push(value);
             }
 
-            bytes.into_iter().reduce(|acc, v| v.concat(&acc)).unwrap()
+            match self.endianness {
+                Endianness::Little => bytes.into_iter().reduce(|acc, v| v.concat(&acc)).unwrap(),
+                Endianness::Big => bytes
+                    .into_iter()
+                    .rev()
+                    .reduce(|acc, v| v.concat(&acc))
+                    .unwrap(),
+            }
         };
 
         Ok(value)
@@ -127,11 +136,114 @@ impl ArrayMemory {
             let high_bit = (n + 1) * BITS_IN_BYTE - 1;
             let byte = value.slice(low_bit, high_bit);
 
-            let offset = self.ctx.from_u64(n as u64, ptr_size);
+            let offset = match self.endianness {
+                Endianness::Little => self.ctx.from_u64(n as u64, ptr_size),
+                Endianness::Big => self.ctx.from_u64((num_bytes - 1 - n) as u64, ptr_size),
+            };
             let addr = addr.add(&offset);
             self.write_u8(&addr, byte);
         }
 
         Ok(())
+    }
+}
+
+mod test {
+    use crate::{general_assembly::Endianness, smt::DContext};
+
+    use super::ArrayMemory;
+
+    fn setup_test_memory(endianness: Endianness) -> ArrayMemory {
+        let ctx = Box::new(DContext::new());
+        let ctx = Box::leak(ctx);
+        ArrayMemory::new(ctx, 32, endianness)
+    }
+
+    #[test]
+    fn test_little_endian_write() {
+        let mut memory = setup_test_memory(Endianness::Little);
+        let indata = memory.ctx.from_u64(0x01020304, 32);
+        let addr = memory.ctx.from_u64(0, 32);
+        let one = memory.ctx.from_u64(1, 32);
+        memory.write(&addr, indata).ok();
+        let b1 = memory.read_u8(&addr);
+        let addr = addr.add(&one);
+        let b2 = memory.read_u8(&addr);
+        let addr = addr.add(&one);
+        let b3 = memory.read_u8(&addr);
+        let addr = addr.add(&one);
+        let b4 = memory.read_u8(&addr);
+
+        assert_eq!(b1.get_constant().unwrap(), 0x04);
+        assert_eq!(b2.get_constant().unwrap(), 0x03);
+        assert_eq!(b3.get_constant().unwrap(), 0x02);
+        assert_eq!(b4.get_constant().unwrap(), 0x01);
+    }
+
+    #[test]
+    fn test_big_endian_write() {
+        let mut memory = setup_test_memory(Endianness::Big);
+        let indata = memory.ctx.from_u64(0x01020304, 32);
+        let addr = memory.ctx.from_u64(0, 32);
+        let one = memory.ctx.from_u64(1, 32);
+        memory.write(&addr, indata).ok();
+        let b1 = memory.read_u8(&addr);
+        let addr = addr.add(&one);
+        let b2 = memory.read_u8(&addr);
+        let addr = addr.add(&one);
+        let b3 = memory.read_u8(&addr);
+        let addr = addr.add(&one);
+        let b4 = memory.read_u8(&addr);
+
+        assert_eq!(b1.get_constant().unwrap(), 0x01);
+        assert_eq!(b2.get_constant().unwrap(), 0x02);
+        assert_eq!(b3.get_constant().unwrap(), 0x03);
+        assert_eq!(b4.get_constant().unwrap(), 0x04);
+    }
+
+    #[test]
+    fn test_little_endian_read() {
+        let mut memory = setup_test_memory(Endianness::Little);
+        let b1 = memory.ctx.from_u64(0x04, 8);
+        let b2 = memory.ctx.from_u64(0x03, 8);
+        let b3 = memory.ctx.from_u64(0x02, 8);
+        let b4 = memory.ctx.from_u64(0x01, 8);
+
+        let one = memory.ctx.from_u64(1, 32);
+        let addr = memory.ctx.from_u64(0, 32);
+        memory.write_u8(&addr, b1);
+        let addr = addr.add(&one);
+        memory.write_u8(&addr, b2);
+        let addr = addr.add(&one);
+        memory.write_u8(&addr, b3);
+        let addr = addr.add(&one);
+        memory.write_u8(&addr, b4);
+
+        let addr = memory.ctx.from_u64(0, 32);
+        let result = memory.read(&addr, 32).ok().unwrap();
+        assert_eq!(result.get_constant().unwrap(), 0x01020304);
+    }
+
+    #[test]
+    fn test_big_endian_read() {
+        let mut memory = setup_test_memory(Endianness::Big);
+        let b1 = memory.ctx.from_u64(0x01, 8);
+        let b2 = memory.ctx.from_u64(0x02, 8);
+        let b3 = memory.ctx.from_u64(0x03, 8);
+        let b4 = memory.ctx.from_u64(0x04, 8);
+
+        let one = memory.ctx.from_u64(1, 32);
+        let addr = memory.ctx.from_u64(0, 32);
+        memory.write_u8(&addr, b1);
+        let addr = addr.add(&one);
+        memory.write_u8(&addr, b2);
+        let addr = addr.add(&one);
+        memory.write_u8(&addr, b3);
+        let addr = addr.add(&one);
+        memory.write_u8(&addr, b4);
+
+        let addr = memory.ctx.from_u64(0, 32);
+        let result = memory.read(&addr, 32).ok().unwrap();
+        assert_eq!(result.get_constant().unwrap(), 0x01020304);
     }
 }
