@@ -6,8 +6,8 @@ use std::time::Instant;
 use tracing::{debug, info};
 
 use crate::{
-    elf_util,
-    general_assembly::{self, project::PCHook, GAError},
+    elf_util::{VisualPathResult, PathStatus, ErrorReason},
+    general_assembly::{self, project::PCHook, GAError, executor::PathResult},
     smt::DContext,
 };
 
@@ -59,7 +59,7 @@ pub fn run_elf(
     path: &str,
     function: &str,
     // _cfg: &RunConfig,
-) -> Result<Vec<GAVisualPathResult>, GAError> {
+) -> Result<Vec<VisualPathResult>, GAError> {
     let context = Box::new(DContext::new());
     let context = Box::leak(context);
 
@@ -82,21 +82,17 @@ pub fn run_elf(
     run_elf_paths(&mut vm)
 }
 
-type GAPathResult = general_assembly::executor::PathResult;
-type GAPathStatus = elf_util::PathStatus;
-type GAErrorReason = elf_util::ErrorReason;
-type GAVisualPathResult = elf_util::VisualPathResult;
-
-fn run_elf_paths(vm: &mut general_assembly::vm::VM) -> Result<Vec<GAVisualPathResult>, GAError> {
+/// Runs all paths in the vm
+fn run_elf_paths(vm: &mut general_assembly::vm::VM) -> Result<Vec<VisualPathResult>, GAError> {
     let mut path_num = 0;
     let start = Instant::now();
     let mut path_results = vec![];
     while let Some((path_result, state)) = vm.run()? {
-        if matches!(path_result, GAPathResult::Suppress) {
+        if matches!(path_result, PathResult::Suppress) {
             debug!("Suppressing path");
             continue;
         }
-        if matches!(path_result, GAPathResult::AssumptionUnsat) {
+        if matches!(path_result, PathResult::AssumptionUnsat) {
             println!("Encountered an unsatisfiable assumption, ignoring this path");
             continue;
         }
@@ -104,9 +100,9 @@ fn run_elf_paths(vm: &mut general_assembly::vm::VM) -> Result<Vec<GAVisualPathRe
         path_num += 1;
 
         let v_path_result = match path_result {
-            general_assembly::executor::PathResult::Success(_v) => GAPathStatus::Ok(None),
+            general_assembly::executor::PathResult::Success(_v) => PathStatus::Ok(None),
             general_assembly::executor::PathResult::Faliure => {
-                GAPathStatus::Failed(GAErrorReason {
+                PathStatus::Failed(ErrorReason {
                     error_message: "panic".to_owned(),
                 })
             }
@@ -114,7 +110,7 @@ fn run_elf_paths(vm: &mut general_assembly::vm::VM) -> Result<Vec<GAVisualPathRe
             general_assembly::executor::PathResult::Suppress => todo!(),
         };
 
-        let result = GAVisualPathResult::from_state(state, path_num, v_path_result)?;
+        let result = VisualPathResult::from_state(state, path_num, v_path_result)?;
         println!("{}", result);
         path_results.push(result);
     }
