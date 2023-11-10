@@ -1,5 +1,8 @@
 use std::path::Path;
 
+
+#[cfg(feature = "llvm")]
+mod test_runner_llvm {
 use symex::{
     smt::{DContext, DExpr},
     vm::{LLVMState, PathResult, Project, VM},
@@ -46,4 +49,5 @@ pub fn run(path: impl AsRef<Path>, function: &str) -> Vec<Option<u128>> {
     }
 
     results
+}
 }

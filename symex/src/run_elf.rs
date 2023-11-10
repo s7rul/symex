@@ -13,7 +13,6 @@ use crate::{
     elf_util,
     general_assembly::{self, project::PCHook, GAError},
     smt::DContext,
-    util::{ErrorReason, ExpressionType, LineTrace, PathStatus, Variable, VisualPathResult},
 };
 
 #[derive(Debug)]

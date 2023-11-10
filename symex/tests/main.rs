@@ -1,6 +1,8 @@
-mod test_runner;
+#[cfg(feature = "llvm")]
+mod llvm_tests {
 
-use test_runner::run;
+mod test_runner;
+use super::test_runner::run;
 
 // Check that simple instructions work.
 #[test]
@@ -125,4 +127,5 @@ fn structs_work() {
     let res = run("tests/samples/structs.bc", "structs::foo");
     assert_eq!(res.len(), 1, "expected 1 path");
     assert_eq!(res[0], Some(15));
+}
 }
