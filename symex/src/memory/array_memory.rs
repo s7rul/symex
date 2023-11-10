@@ -148,10 +148,10 @@ impl ArrayMemory {
     }
 }
 
+#[cfg(test)]
 mod test {
-    use crate::{general_assembly::Endianness, smt::DContext};
-
     use super::ArrayMemory;
+    use crate::{general_assembly::Endianness, smt::DContext};
 
     fn setup_test_memory(endianness: Endianness) -> ArrayMemory {
         let ctx = Box::new(DContext::new());

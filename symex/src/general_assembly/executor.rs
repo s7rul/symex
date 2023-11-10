@@ -6,15 +6,13 @@ use tracing::{debug, trace};
 
 use crate::{
     elf_util::{ExpressionType, Variable},
-    general_assembly::{
-        executor, path_selection::Path, state::HookOrInstruction, Endianness, WordSize,
-    },
-    smt::{DContext, DExpr, DSolver, SolverError},
+    general_assembly::{path_selection::Path, state::HookOrInstruction},
+    smt::{DExpr, SolverError},
 };
 
 use super::{
-    instruction::{CycleCount, Instruction, Operand, Operation},
-    project::{self, Project},
+    instruction::{Instruction, Operand, Operation},
+    project::Project,
     state::GAState,
     vm::VM,
     DataWord, Result,
@@ -103,7 +101,19 @@ impl<'vm> GAExecutor<'vm> {
             Some(const_addr) => {
                 if self.project.address_in_range(const_addr) {
                     if bits == self.project.get_word_size() {
+                        // full word
                         Ok(self.get_dexpr_from_dataword(self.project.get_word(const_addr)?))
+                    } else if bits == self.project.get_word_size() / 2 {
+                        // half word
+                        Ok(self.get_dexpr_from_dataword(
+                            self.project.get_half_word(const_addr)?.into(),
+                        ))
+                    } else if bits == 8 {
+                        // byte
+                        Ok(self
+                            .state
+                            .ctx
+                            .from_u64(self.project.get_byte(const_addr)? as u64, 8))
                     } else {
                         todo!()
                     }
@@ -616,374 +626,395 @@ fn add_with_carry(
     }
 }
 
-#[test]
-fn test_add_with_carry() {
-    let ctx = DContext::new();
-    let one_bool = ctx.from_bool(true);
-    let zero_bool = ctx.from_bool(false);
-    let zero = ctx.from_u64(0, 32);
-    let num42 = ctx.from_u64(42, 32);
-    let num16 = ctx.from_u64(16, 32);
-    let umax = ctx.from_u64(u32::MAX as u64, 32);
-    let smin = ctx.from_u64(i32::MIN as u64, 32);
-    let smax = ctx.from_u64(i32::MAX as u64, 32);
+#[cfg(test)]
+mod test {
+    use std::collections::HashMap;
 
-    // simple add
-    let result = add_with_carry(&num42, &num16, &zero_bool, 32);
-    assert_eq!(result.result.get_constant().unwrap(), 58);
-    assert!(!result.carry_out.get_constant_bool().unwrap());
-    assert!(!result.overflow.get_constant_bool().unwrap());
-
-    // simple sub
-    let result = add_with_carry(&num42, &num16.not(), &one_bool, 32);
-    assert_eq!(result.result.get_constant().unwrap(), 26);
-    assert!(result.carry_out.get_constant_bool().unwrap());
-    assert!(!result.overflow.get_constant_bool().unwrap());
-
-    // signed sub negative result
-    let result = add_with_carry(&num16, &num42.not(), &one_bool, 32);
-    assert_eq!(
-        result.result.get_constant().unwrap(),
-        (-26i32 as u32) as u64
-    );
-    assert!(!result.carry_out.get_constant_bool().unwrap());
-    assert!(!result.overflow.get_constant_bool().unwrap());
-
-    // unsigned overflow
-    let result = add_with_carry(&umax, &num16, &zero_bool, 32);
-    assert_eq!(result.result.get_constant().unwrap(), 15 as u64);
-    assert!(result.carry_out.get_constant_bool().unwrap());
-    assert!(!result.overflow.get_constant_bool().unwrap());
-
-    // signed overflow
-    let result = add_with_carry(&smax, &num16, &zero_bool, 32);
-    assert_eq!(result.result.get_constant().unwrap(), 2147483663);
-    assert!(!result.carry_out.get_constant_bool().unwrap());
-    assert!(result.overflow.get_constant_bool().unwrap());
-
-    // signed underflow
-    let result = add_with_carry(&smin, &num16.not(), &one_bool, 32);
-    assert_eq!(result.result.get_constant().unwrap(), 2147483632);
-    assert!(result.carry_out.get_constant_bool().unwrap());
-    assert!(result.overflow.get_constant_bool().unwrap());
-
-    // zero add
-    let result = add_with_carry(&num16, &zero, &zero_bool, 32);
-    assert_eq!(result.result.get_constant().unwrap(), 16);
-    assert!(!result.carry_out.get_constant_bool().unwrap());
-    assert!(!result.overflow.get_constant_bool().unwrap());
-
-    // zero subb
-    let result = add_with_carry(&num16, &zero.not(), &one_bool, 32);
-    assert_eq!(result.result.get_constant().unwrap(), 16);
-    assert!(result.carry_out.get_constant_bool().unwrap());
-    assert!(!result.overflow.get_constant_bool().unwrap());
-}
-
-fn setup_test_vm() -> VM {
-    // create an empty project
-    let project = Box::new(Project::manual_project(
-        vec![],
-        0,
-        0,
-        WordSize::Bit32,
-        Endianness::Little,
-        object::Architecture::Arm,
-        HashMap::new(),
-        HashMap::new(),
-    ));
-    let project = Box::leak(project);
-    let context = Box::new(DContext::new());
-    let context = Box::leak(context);
-    let solver = DSolver::new(context);
-    let state = GAState::create_test_state(project, context, solver, 0, u32::MAX as u64);
-    let vm = VM::new_with_state(project, state);
-    vm
-}
-
-#[test]
-fn test_move() {
-    let mut vm = setup_test_vm();
-    let project = vm.project;
-    let mut executor = GAExecutor::from_state(vm.paths.get_path().unwrap().state, &mut vm, project);
-    let mut local = HashMap::new();
-    let operand_r0 = Operand::Register("R0".to_owned());
-
-    // move imm into reg
-    let operation = Operation::Move {
-        destination: operand_r0.clone(),
-        source: Operand::Immidiate(DataWord::Word32(42)),
+    use crate::{
+        general_assembly::{
+            executor::{add_with_carry, GAExecutor},
+            instruction::{Operand, Operation},
+            project::Project,
+            state::GAState,
+            vm::VM,
+            DataWord, Endianness, WordSize,
+        },
+        smt::{DContext, DSolver},
     };
-    executor.executer_operation(&operation, &mut local).ok();
 
-    let r0 = executor
-        .get_operand_value(&operand_r0, &local)
-        .unwrap()
-        .get_constant()
-        .unwrap();
-    assert_eq!(r0, 42);
+    #[test]
+    fn test_add_with_carry() {
+        let ctx = DContext::new();
+        let one_bool = ctx.from_bool(true);
+        let zero_bool = ctx.from_bool(false);
+        let zero = ctx.from_u64(0, 32);
+        let num42 = ctx.from_u64(42, 32);
+        let num16 = ctx.from_u64(16, 32);
+        let umax = ctx.from_u64(u32::MAX as u64, 32);
+        let smin = ctx.from_u64(i32::MIN as u64, 32);
+        let smax = ctx.from_u64(i32::MAX as u64, 32);
 
-    // move reg to local
-    let local_r0 = Operand::Local("R0".to_owned());
-    let operation = Operation::Move {
-        destination: local_r0.clone(),
-        source: operand_r0.clone(),
-    };
-    executor.executer_operation(&operation, &mut local).ok();
+        // simple add
+        let result = add_with_carry(&num42, &num16, &zero_bool, 32);
+        assert_eq!(result.result.get_constant().unwrap(), 58);
+        assert!(!result.carry_out.get_constant_bool().unwrap());
+        assert!(!result.overflow.get_constant_bool().unwrap());
 
-    let r0 = executor
-        .get_operand_value(&local_r0, &local)
-        .unwrap()
-        .get_constant()
-        .unwrap();
-    assert_eq!(r0, 42);
+        // simple sub
+        let result = add_with_carry(&num42, &num16.not(), &one_bool, 32);
+        assert_eq!(result.result.get_constant().unwrap(), 26);
+        assert!(result.carry_out.get_constant_bool().unwrap());
+        assert!(!result.overflow.get_constant_bool().unwrap());
 
-    // move immidiate to local memmory addr
-    let imm = Operand::Immidiate(DataWord::Word32(23));
-    let memmory_op = Operand::AddressInLocal("R0".to_owned(), 32);
-    let operation = Operation::Move {
-        destination: memmory_op.clone(),
-        source: imm.clone(),
-    };
-    executor.executer_operation(&operation, &mut local).ok();
+        // signed sub negative result
+        let result = add_with_carry(&num16, &num42.not(), &one_bool, 32);
+        assert_eq!(
+            result.result.get_constant().unwrap(),
+            (-26i32 as u32) as u64
+        );
+        assert!(!result.carry_out.get_constant_bool().unwrap());
+        assert!(!result.overflow.get_constant_bool().unwrap());
 
-    let dexpr_addr = executor.get_dexpr_from_dataword(DataWord::Word32(42));
-    let in_memmory_value = executor
-        .state
-        .read_word_from_memory(&dexpr_addr)
-        .unwrap()
-        .get_constant()
-        .unwrap();
+        // unsigned overflow
+        let result = add_with_carry(&umax, &num16, &zero_bool, 32);
+        assert_eq!(result.result.get_constant().unwrap(), 15 as u64);
+        assert!(result.carry_out.get_constant_bool().unwrap());
+        assert!(!result.overflow.get_constant_bool().unwrap());
 
-    assert_eq!(in_memmory_value, 23);
+        // signed overflow
+        let result = add_with_carry(&smax, &num16, &zero_bool, 32);
+        assert_eq!(result.result.get_constant().unwrap(), 2147483663);
+        assert!(!result.carry_out.get_constant_bool().unwrap());
+        assert!(result.overflow.get_constant_bool().unwrap());
 
-    // move from memmory to a local
-    let operation = Operation::Move {
-        destination: local_r0.clone(),
-        source: memmory_op.clone(),
-    };
-    executor.executer_operation(&operation, &mut local).ok();
+        // signed underflow
+        let result = add_with_carry(&smin, &num16.not(), &one_bool, 32);
+        assert_eq!(result.result.get_constant().unwrap(), 2147483632);
+        assert!(result.carry_out.get_constant_bool().unwrap());
+        assert!(result.overflow.get_constant_bool().unwrap());
 
-    let local_value = executor
-        .get_operand_value(&local_r0, &local)
-        .unwrap()
-        .get_constant()
-        .unwrap();
+        // zero add
+        let result = add_with_carry(&num16, &zero, &zero_bool, 32);
+        assert_eq!(result.result.get_constant().unwrap(), 16);
+        assert!(!result.carry_out.get_constant_bool().unwrap());
+        assert!(!result.overflow.get_constant_bool().unwrap());
 
-    assert_eq!(local_value, 23);
-}
+        // zero subb
+        let result = add_with_carry(&num16, &zero.not(), &one_bool, 32);
+        assert_eq!(result.result.get_constant().unwrap(), 16);
+        assert!(result.carry_out.get_constant_bool().unwrap());
+        assert!(!result.overflow.get_constant_bool().unwrap());
+    }
 
-#[test]
-fn test_add() {
-    let mut vm = setup_test_vm();
-    let project = vm.project;
-    let mut executor = GAExecutor::from_state(vm.paths.get_path().unwrap().state, &mut vm, project);
-    let mut local = HashMap::new();
+    fn setup_test_vm() -> VM {
+        // create an empty project
+        let project = Box::new(Project::manual_project(
+            vec![],
+            0,
+            0,
+            WordSize::Bit32,
+            Endianness::Little,
+            object::Architecture::Arm,
+            HashMap::new(),
+            HashMap::new(),
+        ));
+        let project = Box::leak(project);
+        let context = Box::new(DContext::new());
+        let context = Box::leak(context);
+        let solver = DSolver::new(context);
+        let state = GAState::create_test_state(project, context, solver, 0, u32::MAX as u64);
+        let vm = VM::new_with_state(project, state);
+        vm
+    }
 
-    let r0 = Operand::Register("R0".to_owned());
-    let imm_42 = Operand::Immidiate(DataWord::Word32(42));
-    let imm_umax = Operand::Immidiate(DataWord::Word32(u32::MAX));
-    let imm_16 = Operand::Immidiate(DataWord::Word32(16));
-    let imm_minus70 = Operand::Immidiate(DataWord::Word32(-70i32 as u32));
+    #[test]
+    fn test_move() {
+        let mut vm = setup_test_vm();
+        let project = vm.project;
+        let mut executor =
+            GAExecutor::from_state(vm.paths.get_path().unwrap().state, &mut vm, project);
+        let mut local = HashMap::new();
+        let operand_r0 = Operand::Register("R0".to_owned());
 
-    // test simple add
-    let operation = Operation::Add {
-        destination: r0.clone(),
-        operand1: imm_42.clone(),
-        operand2: imm_16.clone(),
-    };
-    executor.executer_operation(&operation, &mut local).ok();
+        // move imm into reg
+        let operation = Operation::Move {
+            destination: operand_r0.clone(),
+            source: Operand::Immidiate(DataWord::Word32(42)),
+        };
+        executor.executer_operation(&operation, &mut local).ok();
 
-    let r0_value = executor
-        .get_operand_value(&r0, &local)
-        .unwrap()
-        .get_constant()
-        .unwrap();
-    assert_eq!(r0_value, 58);
+        let r0 = executor
+            .get_operand_value(&operand_r0, &local)
+            .unwrap()
+            .get_constant()
+            .unwrap();
+        assert_eq!(r0, 42);
 
-    // test add with same operand and destination
-    let operation = Operation::Add {
-        destination: r0.clone(),
-        operand1: r0.clone(),
-        operand2: imm_16.clone(),
-    };
-    executor.executer_operation(&operation, &mut local).ok();
+        // move reg to local
+        let local_r0 = Operand::Local("R0".to_owned());
+        let operation = Operation::Move {
+            destination: local_r0.clone(),
+            source: operand_r0.clone(),
+        };
+        executor.executer_operation(&operation, &mut local).ok();
 
-    let r0_value = executor
-        .get_operand_value(&r0, &local)
-        .unwrap()
-        .get_constant()
-        .unwrap();
-    assert_eq!(r0_value, 74);
+        let r0 = executor
+            .get_operand_value(&local_r0, &local)
+            .unwrap()
+            .get_constant()
+            .unwrap();
+        assert_eq!(r0, 42);
 
-    // test add with negative number
-    let operation = Operation::Add {
-        destination: r0.clone(),
-        operand1: imm_42.clone(),
-        operand2: imm_minus70.clone(),
-    };
-    executor.executer_operation(&operation, &mut local).ok();
+        // move immidiate to local memmory addr
+        let imm = Operand::Immidiate(DataWord::Word32(23));
+        let memmory_op = Operand::AddressInLocal("R0".to_owned(), 32);
+        let operation = Operation::Move {
+            destination: memmory_op.clone(),
+            source: imm.clone(),
+        };
+        executor.executer_operation(&operation, &mut local).ok();
 
-    let r0_value = executor
-        .get_operand_value(&r0, &local)
-        .unwrap()
-        .get_constant()
-        .unwrap();
-    assert_eq!(r0_value, (-28i32 as u32) as u64);
+        let dexpr_addr = executor.get_dexpr_from_dataword(DataWord::Word32(42));
+        let in_memmory_value = executor
+            .state
+            .read_word_from_memory(&dexpr_addr)
+            .unwrap()
+            .get_constant()
+            .unwrap();
 
-    // test add overflow
-    let operation = Operation::Add {
-        destination: r0.clone(),
-        operand1: imm_42.clone(),
-        operand2: imm_umax.clone(),
-    };
-    executor.executer_operation(&operation, &mut local).ok();
+        assert_eq!(in_memmory_value, 23);
 
-    let r0_value = executor
-        .get_operand_value(&r0, &local)
-        .unwrap()
-        .get_constant()
-        .unwrap();
-    assert_eq!(r0_value, 41);
-}
+        // move from memmory to a local
+        let operation = Operation::Move {
+            destination: local_r0.clone(),
+            source: memmory_op.clone(),
+        };
+        executor.executer_operation(&operation, &mut local).ok();
 
-#[test]
-fn test_sub() {
-    let mut vm = setup_test_vm();
-    let project = vm.project;
-    let mut executor = GAExecutor::from_state(vm.paths.get_path().unwrap().state, &mut vm, project);
-    let mut local = HashMap::new();
+        let local_value = executor
+            .get_operand_value(&local_r0, &local)
+            .unwrap()
+            .get_constant()
+            .unwrap();
 
-    let r0 = Operand::Register("R0".to_owned());
-    let imm_42 = Operand::Immidiate(DataWord::Word32(42));
-    let imm_imin = Operand::Immidiate(DataWord::Word32(i32::MIN as u32));
-    let imm_16 = Operand::Immidiate(DataWord::Word32(16));
-    let imm_minus70 = Operand::Immidiate(DataWord::Word32(-70i32 as u32));
+        assert_eq!(local_value, 23);
+    }
 
-    // test simple sub
-    let operation = Operation::Sub {
-        destination: r0.clone(),
-        operand1: imm_42.clone(),
-        operand2: imm_16.clone(),
-    };
-    executor.executer_operation(&operation, &mut local).ok();
+    #[test]
+    fn test_add() {
+        let mut vm = setup_test_vm();
+        let project = vm.project;
+        let mut executor =
+            GAExecutor::from_state(vm.paths.get_path().unwrap().state, &mut vm, project);
+        let mut local = HashMap::new();
 
-    let r0_value = executor
-        .get_operand_value(&r0, &local)
-        .unwrap()
-        .get_constant()
-        .unwrap();
-    assert_eq!(r0_value, 26);
+        let r0 = Operand::Register("R0".to_owned());
+        let imm_42 = Operand::Immidiate(DataWord::Word32(42));
+        let imm_umax = Operand::Immidiate(DataWord::Word32(u32::MAX));
+        let imm_16 = Operand::Immidiate(DataWord::Word32(16));
+        let imm_minus70 = Operand::Immidiate(DataWord::Word32(-70i32 as u32));
 
-    // test sub with same operand and destination
-    let operation = Operation::Sub {
-        destination: r0.clone(),
-        operand1: r0.clone(),
-        operand2: imm_16.clone(),
-    };
-    executor.executer_operation(&operation, &mut local).ok();
+        // test simple add
+        let operation = Operation::Add {
+            destination: r0.clone(),
+            operand1: imm_42.clone(),
+            operand2: imm_16.clone(),
+        };
+        executor.executer_operation(&operation, &mut local).ok();
 
-    let r0_value = executor
-        .get_operand_value(&r0, &local)
-        .unwrap()
-        .get_constant()
-        .unwrap();
-    assert_eq!(r0_value, 10);
+        let r0_value = executor
+            .get_operand_value(&r0, &local)
+            .unwrap()
+            .get_constant()
+            .unwrap();
+        assert_eq!(r0_value, 58);
 
-    // test sub with negative number
-    let operation = Operation::Sub {
-        destination: r0.clone(),
-        operand1: imm_42.clone(),
-        operand2: imm_minus70.clone(),
-    };
-    executor.executer_operation(&operation, &mut local).ok();
+        // test add with same operand and destination
+        let operation = Operation::Add {
+            destination: r0.clone(),
+            operand1: r0.clone(),
+            operand2: imm_16.clone(),
+        };
+        executor.executer_operation(&operation, &mut local).ok();
 
-    let r0_value = executor
-        .get_operand_value(&r0, &local)
-        .unwrap()
-        .get_constant()
-        .unwrap();
-    assert_eq!(r0_value, 112);
+        let r0_value = executor
+            .get_operand_value(&r0, &local)
+            .unwrap()
+            .get_constant()
+            .unwrap();
+        assert_eq!(r0_value, 74);
 
-    // test sub underflow
-    let operation = Operation::Sub {
-        destination: r0.clone(),
-        operand1: imm_42.clone(),
-        operand2: imm_imin.clone(),
-    };
-    executor.executer_operation(&operation, &mut local).ok();
+        // test add with negative number
+        let operation = Operation::Add {
+            destination: r0.clone(),
+            operand1: imm_42.clone(),
+            operand2: imm_minus70.clone(),
+        };
+        executor.executer_operation(&operation, &mut local).ok();
 
-    let r0_value = executor
-        .get_operand_value(&r0, &local)
-        .unwrap()
-        .get_constant()
-        .unwrap();
-    assert_eq!(r0_value, ((i32::MIN) as u32 + 42) as u64);
-}
+        let r0_value = executor
+            .get_operand_value(&r0, &local)
+            .unwrap()
+            .get_constant()
+            .unwrap();
+        assert_eq!(r0_value, (-28i32 as u32) as u64);
 
-#[test]
-fn test_set_v_flag() {
-    let mut vm = setup_test_vm();
-    let project = vm.project;
-    let mut executor = GAExecutor::from_state(vm.paths.get_path().unwrap().state, &mut vm, project);
-    let mut local = HashMap::new();
+        // test add overflow
+        let operation = Operation::Add {
+            destination: r0.clone(),
+            operand1: imm_42.clone(),
+            operand2: imm_umax.clone(),
+        };
+        executor.executer_operation(&operation, &mut local).ok();
 
-    let imm_42 = Operand::Immidiate(DataWord::Word32(42));
-    let imm_12 = Operand::Immidiate(DataWord::Word32(12));
-    let imm_0 = Operand::Immidiate(DataWord::Word32(0));
-    let imm_imin = Operand::Immidiate(DataWord::Word32(i32::MIN as u32));
-    let imm_imax = Operand::Immidiate(DataWord::Word32(i32::MAX as u32));
-    let imm_16 = Operand::Immidiate(DataWord::Word32(16));
-    let imm_minus70 = Operand::Immidiate(DataWord::Word32(-70i32 as u32));
+        let r0_value = executor
+            .get_operand_value(&r0, &local)
+            .unwrap()
+            .get_constant()
+            .unwrap();
+        assert_eq!(r0_value, 41);
+    }
 
-    // no overflow
-    let operation = Operation::SetVFlag {
-        operand1: imm_42.clone(),
-        operand2: imm_12.clone(),
-        sub: true,
-        carry: false,
-    };
-    executor.executer_operation(&operation, &mut local).ok();
+    #[test]
+    fn test_sub() {
+        let mut vm = setup_test_vm();
+        let project = vm.project;
+        let mut executor =
+            GAExecutor::from_state(vm.paths.get_path().unwrap().state, &mut vm, project);
+        let mut local = HashMap::new();
 
-    let v_flag = executor
-        .state
-        .get_flag("V".to_owned())
-        .unwrap()
-        .get_constant_bool()
-        .unwrap();
-    assert!(!v_flag);
+        let r0 = Operand::Register("R0".to_owned());
+        let imm_42 = Operand::Immidiate(DataWord::Word32(42));
+        let imm_imin = Operand::Immidiate(DataWord::Word32(i32::MIN as u32));
+        let imm_16 = Operand::Immidiate(DataWord::Word32(16));
+        let imm_minus70 = Operand::Immidiate(DataWord::Word32(-70i32 as u32));
 
-    // overflow
-    let operation = Operation::SetVFlag {
-        operand1: imm_imax.clone(),
-        operand2: imm_12.clone(),
-        sub: false,
-        carry: false,
-    };
-    executor.executer_operation(&operation, &mut local).ok();
+        // test simple sub
+        let operation = Operation::Sub {
+            destination: r0.clone(),
+            operand1: imm_42.clone(),
+            operand2: imm_16.clone(),
+        };
+        executor.executer_operation(&operation, &mut local).ok();
 
-    let v_flag = executor
-        .state
-        .get_flag("V".to_owned())
-        .unwrap()
-        .get_constant_bool()
-        .unwrap();
-    assert!(v_flag);
+        let r0_value = executor
+            .get_operand_value(&r0, &local)
+            .unwrap()
+            .get_constant()
+            .unwrap();
+        assert_eq!(r0_value, 26);
 
-    // underflow
-    let operation = Operation::SetVFlag {
-        operand1: imm_imin.clone(),
-        operand2: imm_12.clone(),
-        sub: true,
-        carry: false,
-    };
-    executor.executer_operation(&operation, &mut local).ok();
+        // test sub with same operand and destination
+        let operation = Operation::Sub {
+            destination: r0.clone(),
+            operand1: r0.clone(),
+            operand2: imm_16.clone(),
+        };
+        executor.executer_operation(&operation, &mut local).ok();
 
-    let v_flag = executor
-        .state
-        .get_flag("V".to_owned())
-        .unwrap()
-        .get_constant_bool()
-        .unwrap();
-    assert!(v_flag);
+        let r0_value = executor
+            .get_operand_value(&r0, &local)
+            .unwrap()
+            .get_constant()
+            .unwrap();
+        assert_eq!(r0_value, 10);
+
+        // test sub with negative number
+        let operation = Operation::Sub {
+            destination: r0.clone(),
+            operand1: imm_42.clone(),
+            operand2: imm_minus70.clone(),
+        };
+        executor.executer_operation(&operation, &mut local).ok();
+
+        let r0_value = executor
+            .get_operand_value(&r0, &local)
+            .unwrap()
+            .get_constant()
+            .unwrap();
+        assert_eq!(r0_value, 112);
+
+        // test sub underflow
+        let operation = Operation::Sub {
+            destination: r0.clone(),
+            operand1: imm_42.clone(),
+            operand2: imm_imin.clone(),
+        };
+        executor.executer_operation(&operation, &mut local).ok();
+
+        let r0_value = executor
+            .get_operand_value(&r0, &local)
+            .unwrap()
+            .get_constant()
+            .unwrap();
+        assert_eq!(r0_value, ((i32::MIN) as u32 + 42) as u64);
+    }
+
+    #[test]
+    fn test_set_v_flag() {
+        let mut vm = setup_test_vm();
+        let project = vm.project;
+        let mut executor =
+            GAExecutor::from_state(vm.paths.get_path().unwrap().state, &mut vm, project);
+        let mut local = HashMap::new();
+
+        let imm_42 = Operand::Immidiate(DataWord::Word32(42));
+        let imm_12 = Operand::Immidiate(DataWord::Word32(12));
+        let imm_0 = Operand::Immidiate(DataWord::Word32(0));
+        let imm_imin = Operand::Immidiate(DataWord::Word32(i32::MIN as u32));
+        let imm_imax = Operand::Immidiate(DataWord::Word32(i32::MAX as u32));
+        let imm_16 = Operand::Immidiate(DataWord::Word32(16));
+        let imm_minus70 = Operand::Immidiate(DataWord::Word32(-70i32 as u32));
+
+        // no overflow
+        let operation = Operation::SetVFlag {
+            operand1: imm_42.clone(),
+            operand2: imm_12.clone(),
+            sub: true,
+            carry: false,
+        };
+        executor.executer_operation(&operation, &mut local).ok();
+
+        let v_flag = executor
+            .state
+            .get_flag("V".to_owned())
+            .unwrap()
+            .get_constant_bool()
+            .unwrap();
+        assert!(!v_flag);
+
+        // overflow
+        let operation = Operation::SetVFlag {
+            operand1: imm_imax.clone(),
+            operand2: imm_12.clone(),
+            sub: false,
+            carry: false,
+        };
+        executor.executer_operation(&operation, &mut local).ok();
+
+        let v_flag = executor
+            .state
+            .get_flag("V".to_owned())
+            .unwrap()
+            .get_constant_bool()
+            .unwrap();
+        assert!(v_flag);
+
+        // underflow
+        let operation = Operation::SetVFlag {
+            operand1: imm_imin.clone(),
+            operand2: imm_12.clone(),
+            sub: true,
+            carry: false,
+        };
+        executor.executer_operation(&operation, &mut local).ok();
+
+        let v_flag = executor
+            .state
+            .get_flag("V".to_owned())
+            .unwrap()
+            .get_constant_bool()
+            .unwrap();
+        assert!(v_flag);
+    }
 }
