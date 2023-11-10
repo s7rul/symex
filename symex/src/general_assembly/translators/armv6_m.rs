@@ -8,7 +8,7 @@ use armv6_m_instruction_parser::{
 use crate::general_assembly::{
     instruction::{Condition, CycleCount, Operand},
     state::GAState,
-    translator::Translator,
+    translator::Translatable,
     DataWord,
 };
 
@@ -16,7 +16,7 @@ type GAInstruction = crate::general_assembly::instruction::Instruction;
 type GAOperation = crate::general_assembly::instruction::Operation;
 type ArmCodition = armv6_m_instruction_parser::conditions::Condition;
 
-impl Translator for Instruction {
+impl Translatable for Instruction {
     fn translate(&self) -> GAInstruction {
         match &self.operation {
             Operation::ADCReg { m, n, d } => {

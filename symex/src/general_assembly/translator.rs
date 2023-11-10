@@ -3,6 +3,7 @@
 
 use super::instruction::Instruction;
 
-pub trait Translator {
+/// A translator 
+pub trait Translatable {
     fn translate(&self) -> Instruction;
 }

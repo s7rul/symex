@@ -5,7 +5,7 @@ use gimli::{DebugAbbrev, DebugInfo, DebugPubNames};
 use object::{Object, ObjectSection, ObjectSymbol};
 use tracing::debug;
 
-use crate::{general_assembly::translator::Translator, memory::MemoryError};
+use crate::{general_assembly::translator::Translatable, memory::MemoryError};
 
 use super::{instruction::Instruction, DataHalfWord, DataWord, Endianness, RawDataWord, WordSize};
 
