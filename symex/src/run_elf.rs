@@ -1,12 +1,8 @@
 //! Simple runner that starts symbolic execution on LLVM bitcode.
 //!
 //!
-use std::{
-    path::Path,
-    time::{Duration, Instant},
-};
+use std::time::Instant;
 
-use rustc_demangle::demangle;
 use tracing::{debug, info};
 
 use crate::{

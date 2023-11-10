@@ -10,5 +10,3 @@ pub mod smt;
 pub mod util;
 #[cfg(feature = "llvm")]
 pub mod vm;
-
-pub(crate) const MAX_INTRINSIC_CONCRETIZATIONS: usize = 50;
