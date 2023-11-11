@@ -50,11 +50,8 @@ fn run() -> Result<()> {
 
     // maybe  hacky look into later
     #[cfg(not(feature = "llvm"))]
-    match args.elf {
-        Some(_) => {
-            return run_elf(args);
-        }
-        None => Ok(()),
+    if args.elf {
+        run_elf(args)?;
     }
 
     #[cfg(feature = "llvm")]
@@ -64,14 +61,39 @@ fn run() -> Result<()> {
         },
         None => run_rs(args),
     }
+
+    Ok(())
 }
 
 #[cfg(not(feature = "llvm"))]
 fn run_elf(args: Args) -> Result<()> {
+    use crate::build::generate_binary_build_command;
+
     debug!("Run elf file.");
-    let path = match args.elf {
+    let path = match args.path {
         Some(path) => path,
-        None => todo!(),
+        None => {
+            let opts = settings_from_args(&args);
+
+            // Build LLVM BC file.
+            let cargo_out = generate_binary_build_command(&opts).output()?;
+            debug!("cargo output: {cargo_out:?}");
+            if !cargo_out.status.success() {
+                let cargo_output = String::from_utf8(cargo_out.stderr)?;
+                return Err(anyhow!(cargo_output));
+            }
+            let output = String::from_utf8(cargo_out.stderr)?;
+            if !output.is_empty() {
+                eprintln!("{output}");
+            }
+
+            // Create path to .bc file.
+            let target_dir = opts.get_target_dir()?;
+            let target_name = opts.get_target_name()?;
+
+            debug!("target dir: {:?}, target name: {}", target_dir, target_name);
+            format!("{}/{}", target_dir.to_str().unwrap(), target_name)
+        }
     };
     let function_name = match args.function {
         Some(function) => function,

@@ -6,8 +6,8 @@ use std::time::Instant;
 use tracing::{debug, info};
 
 use crate::{
-    elf_util::{VisualPathResult, PathStatus, ErrorReason},
-    general_assembly::{self, project::PCHook, GAError, executor::PathResult},
+    elf_util::{ErrorReason, PathStatus, VisualPathResult},
+    general_assembly::{self, executor::PathResult, project::PCHook, GAError},
     smt::DContext,
 };
 
@@ -101,11 +101,9 @@ fn run_elf_paths(vm: &mut general_assembly::vm::VM) -> Result<Vec<VisualPathResu
 
         let v_path_result = match path_result {
             general_assembly::executor::PathResult::Success(_v) => PathStatus::Ok(None),
-            general_assembly::executor::PathResult::Faliure => {
-                PathStatus::Failed(ErrorReason {
-                    error_message: "panic".to_owned(),
-                })
-            }
+            general_assembly::executor::PathResult::Faliure => PathStatus::Failed(ErrorReason {
+                error_message: "panic".to_owned(),
+            }),
             general_assembly::executor::PathResult::AssumptionUnsat => todo!(),
             general_assembly::executor::PathResult::Suppress => todo!(),
         };

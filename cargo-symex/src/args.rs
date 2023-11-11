@@ -16,7 +16,10 @@ pub struct Args {
         conflicts_with = "subcommand",
         conflicts_with = "embed_bitcode"
     )]
-    pub elf: Option<String>,
+    pub path: Option<String>,
+
+    #[clap(long)]
+    pub elf: bool,
 
     /// Build package library.
     #[clap(long, conflicts_with = "bin", conflicts_with = "example")]

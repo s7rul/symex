@@ -38,7 +38,6 @@ struct AddWithCarryResult {
 }
 
 impl<'vm> GAExecutor<'vm> {
-
     /// Construct a executor from a state.
     pub fn from_state(state: GAState, vm: &'vm mut VM, project: &'static Project) -> Self {
         Self { vm, state, project }

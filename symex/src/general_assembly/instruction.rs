@@ -210,7 +210,7 @@ pub enum Condition {
 
     /// Carry set C = 1
     CS,
-    
+
     /// Carry clear C = 0
     CC,
 
