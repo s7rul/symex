@@ -148,14 +148,15 @@ impl Translatable for Instruction {
                 }],
             },
             Operation::ADR { d, imm } => {
-                let imm = imm + 2;
+                let imm = imm;
                 GAInstruction {
                     instruction_size: 16,
                     max_cycle: CycleCount::Value(1),
                     operations: vec![
-                        GAOperation::Move {
+                        GAOperation::Add {
                             destination: Operand::Local("addr".to_owned()),
-                            source: arm_register_to_ga_operand(&Register::PC),
+                            operand1: arm_register_to_ga_operand(&Register::PC),
+                            operand2: Operand::Immidiate(DataWord::Word32(2)),
                         },
                         GAOperation::And {
                             destination: Operand::Local("addr".to_owned()),
@@ -165,7 +166,7 @@ impl Translatable for Instruction {
                         GAOperation::Add {
                             destination: arm_register_to_ga_operand(d),
                             operand1: Operand::Local("addr".to_owned()),
-                            operand2: Operand::Immidiate(DataWord::Word32(imm + 4)),
+                            operand2: Operand::Immidiate(DataWord::Word32(*imm)),
                         },
                     ],
                 }
@@ -530,15 +531,20 @@ impl Translatable for Instruction {
                 instruction_size: 16,
                 max_cycle: CycleCount::Value(2),
                 operations: vec![
-                    GAOperation::And {
+                    GAOperation::Add {
                         destination: Operand::Local("addr".to_owned()),
                         operand1: arm_register_to_ga_operand(&Register::PC),
+                        operand2: Operand::Immidiate(DataWord::Word32(2)),
+                    },
+                    GAOperation::And {
+                        destination: Operand::Local("addr".to_owned()),
+                        operand1: Operand::Local("addr".to_owned()),
                         operand2: Operand::Immidiate(DataWord::Word32(!0b11)),
                     },
                     GAOperation::Add {
                         destination: Operand::Local("addr".to_owned()),
                         operand1: Operand::Local("addr".to_owned()),
-                        operand2: Operand::Immidiate(DataWord::Word32(*imm + 4)),
+                        operand2: Operand::Immidiate(DataWord::Word32(*imm)),
                     },
                     GAOperation::Move {
                         destination: arm_register_to_ga_operand(t),
