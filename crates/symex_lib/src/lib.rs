@@ -1,6 +1,8 @@
 #![no_std]
 mod any;
 
+use core::mem::size_of;
+
 pub use any::{any, Any};
 pub use valid_derive::Validate;
 
@@ -60,7 +62,15 @@ fn suppress_path() {
 /// ```
 #[inline(never)]
 pub fn symbolic<T>(value: &mut T) {
+    let mut size = size_of::<T>();
+    black_box(&mut size);
+    symbolic_size(value, size_of::<T>());
+}
+
+#[inline(never)]
+pub extern "C" fn symbolic_size<T>(value: &mut T, mut size: usize) {
     black_box(value);
+    black_box(&mut size);
 }
 
 /// Assume the passed value contains a valid representation.

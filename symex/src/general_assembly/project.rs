@@ -2,12 +2,15 @@ use std::{collections::HashMap, fmt::Debug, fs};
 
 use armv6_m_instruction_parser::parse;
 use gimli::{DebugAbbrev, DebugInfo, DebugPubNames};
-use object::{Object, ObjectSection, ObjectSymbol};
+use object::{Architecture, Object, ObjectSection, ObjectSymbol};
 use tracing::debug;
 
 use crate::{general_assembly::translator::Translatable, memory::MemoryError};
 
-use super::{instruction::Instruction, DataHalfWord, DataWord, Endianness, RawDataWord, WordSize};
+use super::{
+    executor, instruction::Instruction, state::GAState, DataHalfWord, DataWord, Endianness,
+    RawDataWord, Result as SuperResult, WordSize,
+};
 
 mod dwarf_helper;
 use dwarf_helper::*;
@@ -31,6 +34,7 @@ pub enum PCHook {
     Continue,
     EndSuccess,
     EndFaliure,
+    Intrinsic(fn(state: &mut GAState) -> SuperResult<()>),
     Suppress,
 }
 
@@ -71,7 +75,8 @@ impl Project {
             pc_hooks,
         }
     }
-    pub fn from_path(path: &str, pc_hooks: Vec<(&str, PCHook)>) -> Result<Self> {
+
+    pub fn from_path(path: &str, mut pc_hooks: Vec<(&str, PCHook)>) -> Result<Self> {
         debug!("Parsing elf file: {}", path);
         let file = fs::read(path).expect("Unable to open file.");
         let obj_file = match object::File::parse(&*file) {
@@ -141,6 +146,13 @@ impl Project {
 
         let debug_abbrev = obj_file.section_by_name(".debug_abbrev").unwrap();
         let debug_abbrev = DebugAbbrev::new(debug_abbrev.data().unwrap(), gimli_endian);
+
+        match architecture {
+            Architecture::Arm => {
+                armv6_m_instruction_parser::instructons::Instruction::add_pc_hooks(&mut pc_hooks)
+            }
+            _ => todo!(),
+        }
 
         let pc_hooks = construct_pc_hooks(pc_hooks, &debug_pubnames, &debug_info, &debug_abbrev);
 

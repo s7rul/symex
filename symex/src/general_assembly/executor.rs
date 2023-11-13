@@ -6,7 +6,7 @@ use tracing::{debug, trace};
 
 use crate::{
     elf_util::{ExpressionType, Variable},
-    general_assembly::{path_selection::Path, state::HookOrInstruction},
+    general_assembly::{instruction::CycleCount, path_selection::Path, state::HookOrInstruction},
     smt::{DExpr, SolverError},
 };
 
@@ -51,7 +51,9 @@ impl<'vm> GAExecutor<'vm> {
             let instruction = match self.state.get_next_instruction()? {
                 HookOrInstruction::Instruction(v) => v,
                 HookOrInstruction::PcHook(hook) => match hook {
-                    crate::general_assembly::project::PCHook::Continue => todo!(),
+                    crate::general_assembly::project::PCHook::Continue => {
+                        todo!()
+                    }
                     crate::general_assembly::project::PCHook::EndSuccess => {
                         debug!("Symbolic execution ended succesfully");
                         for (reg_name, reg_value) in &self.state.registers {
@@ -68,6 +70,10 @@ impl<'vm> GAExecutor<'vm> {
                     }
                     crate::general_assembly::project::PCHook::Suppress => {
                         return Ok(PathResult::Suppress);
+                    }
+                    crate::general_assembly::project::PCHook::Intrinsic(f) => {
+                        f(&mut self.state)?;
+                        continue;
                     }
                 },
             };
@@ -235,8 +241,11 @@ impl<'vm> GAExecutor<'vm> {
 
     /// Execute a single instruction.
     fn execute_instruction(&mut self, i: &Instruction) -> Result<()> {
-        // Always increment pc before executing the operations
+        // update last pc
         let new_pc = self.state.get_register("PC".to_owned()).unwrap();
+        self.state.last_pc = new_pc.get_constant().unwrap();
+
+        // Always increment pc before executing the operations
         self.state.set_register(
             "PC".to_owned(),
             new_pc.add(

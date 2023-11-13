@@ -118,6 +118,35 @@ fn test_simple_bool(n: bool) -> u8 {
 }
 
 #[inline(never)]
+#[no_mangle]
+fn test_any() -> u8 {
+    let n = any();
+    test_simple_if(n)
+}
+
+#[inline(never)]
+#[no_mangle]
+fn test_any_u32() -> u32 {
+    let n: u32 = any();
+    if n < 4 {
+        45
+    } else {
+        1
+    }
+}
+
+#[inline(never)]
+#[no_mangle]
+fn test_any_u64() -> u64 {
+    let n: u64 = any();
+    if n < 4 {
+        45
+    } else {
+        1
+    }
+}
+
+#[inline(never)]
 fn test_assume_llvm() -> u8 {
     let n = any();
     test_assume(n)
@@ -167,6 +196,12 @@ fn main() -> ! {
     run_function(test_assume);
     //run_function(test_simple_bool);
     let n = test_simple_bool(true);
+    info!("n: {}", n);
+    let n = test_any();
+    info!("n: {}", n);
+    let n = test_any_u32();
+    info!("n: {}", n);
+    let n = test_any_u64();
     info!("n: {}", n);
     nop_loop();
     simple_loop_llvm();

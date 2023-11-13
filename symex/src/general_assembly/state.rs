@@ -33,6 +33,7 @@ pub struct GAState {
     pub memory: ArrayMemory,
     pub cycle_count: usize,
     pub last_instruction: Option<Instruction>,
+    pub last_pc: u64,
     pub registers: HashMap<String, DExpr>,
     pc_register: u64, // this register is special
     flags: HashMap<String, DExpr>,
@@ -94,6 +95,7 @@ impl GAState {
             instruction_counter: 0,
             has_jumped: false,
             last_instruction: None,
+            last_pc: pc_reg,
         })
     }
 
@@ -180,6 +182,7 @@ impl GAState {
             instruction_counter: 0,
             has_jumped: false,
             last_instruction: None,
+            last_pc: pc_reg,
         }
     }
 

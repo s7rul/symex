@@ -4,13 +4,15 @@ use armv6_m_instruction_parser::{
     instructons::{Instruction, Operation},
     registers::{Register, SpecialRegister},
 };
+use tracing::trace;
 
-use crate::general_assembly::{
+use crate::{general_assembly::{
     instruction::{Condition, CycleCount, Operand},
+    project::PCHook,
     state::GAState,
     translator::Translatable,
     DataWord,
-};
+}, elf_util::{Variable, ExpressionType}};
 
 type GAInstruction = crate::general_assembly::instruction::Instruction;
 type GAOperation = crate::general_assembly::instruction::Operation;
@@ -1615,6 +1617,74 @@ impl Translatable for Instruction {
             Operation::WFI => todo!(),
             Operation::YIELD => todo!(),
         }
+    }
+
+    fn add_pc_hooks(hooks: &mut Vec<(&str, crate::general_assembly::project::PCHook)>) {
+        let symbolic_sized = |state: &mut GAState| {
+            let value_ptr = state.get_register("R0".to_owned()).unwrap();
+            let size = state
+                .get_register("R1".to_owned())
+                .unwrap()
+                .get_constant()
+                .unwrap() * 8;
+            trace!(
+                "trying to create symbolic: addr: {:?}, size: {}",
+                value_ptr,
+                size
+            );
+            let symb_value = state.ctx.unconstrained(size as u32, "any");
+            state.marked_symbolic.push(Variable {
+                name: Some("any".to_owned()),
+                value: symb_value.clone(),
+                ty: ExpressionType::Integer(size as usize),
+            });
+            state.memory.write(&value_ptr, symb_value)?;
+
+            let lr = state.get_register("LR".to_owned()).unwrap();
+            state.set_register("PC".to_owned(), lr);
+            Ok(())
+        };
+        hooks.push(("symbolic_size", PCHook::Intrinsic(symbolic_sized)));
+        hooks.push((
+            "symbolic_size<core::mem::maybe_uninit::MaybeUninit<u8>>",
+            PCHook::Intrinsic(symbolic_sized),
+        ));
+        hooks.push((
+            "symbolic_size<core::mem::maybe_uninit::MaybeUninit<u16>>",
+            PCHook::Intrinsic(symbolic_sized),
+        ));
+        hooks.push((
+            "symbolic_size<core::mem::maybe_uninit::MaybeUninit<u32>>",
+            PCHook::Intrinsic(symbolic_sized),
+        ));
+        hooks.push((
+            "symbolic_size<core::mem::maybe_uninit::MaybeUninit<u64>>",
+            PCHook::Intrinsic(symbolic_sized),
+        ));
+        hooks.push((
+            "symbolic_size<core::mem::maybe_uninit::MaybeUninit<u128>>",
+            PCHook::Intrinsic(symbolic_sized),
+        ));
+        hooks.push((
+            "symbolic_size<core::mem::maybe_uninit::MaybeUninit<i8>>",
+            PCHook::Intrinsic(symbolic_sized),
+        ));
+        hooks.push((
+            "symbolic_size<core::mem::maybe_uninit::MaybeUninit<i16>>",
+            PCHook::Intrinsic(symbolic_sized),
+        ));
+        hooks.push((
+            "symbolic_size<core::mem::maybe_uninit::MaybeUninit<i32>>",
+            PCHook::Intrinsic(symbolic_sized),
+        ));
+        hooks.push((
+            "symbolic_size<core::mem::maybe_uninit::MaybeUninit<i64>>",
+            PCHook::Intrinsic(symbolic_sized),
+        ));
+        hooks.push((
+            "symbolic_size<core::mem::maybe_uninit::MaybeUninit<i128>>",
+            PCHook::Intrinsic(symbolic_sized),
+        ));
     }
 }
 

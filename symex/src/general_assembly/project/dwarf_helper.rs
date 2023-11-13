@@ -23,7 +23,7 @@ pub fn construct_pc_hooks<R: Reader>(
     let mut ret: PCHooks = HashMap::new();
     let mut name_items = pub_names.items();
     let mut found_hooks = HashSet::new();
-    while let Some(pubname) = name_items.next().unwrap() {
+    'inner: while let Some(pubname) = name_items.next().unwrap() {
         let item_name = pubname.name().to_string_lossy().unwrap();
         for (name, hook) in &hooks {
             if item_name.as_ref() == *name {
@@ -36,8 +36,11 @@ pub fn construct_pc_hooks<R: Reader>(
 
                 let die_type = die.tag();
                 if die_type == DW_TAG_subprogram {
+                    let addr = match die.attr_value(DW_AT_low_pc).unwrap() {
+                        Some(v) => v,
+                        None => continue 'inner,
+                    };
                     found_hooks.insert(name);
-                    let addr = die.attr_value(DW_AT_low_pc).unwrap().unwrap();
 
                     if let AttributeValue::Addr(addr_value) = addr {
                         trace!("found hook for {} att addr: {:#X}", name, addr_value);
