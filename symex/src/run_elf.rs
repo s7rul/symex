@@ -68,6 +68,7 @@ pub fn run_elf(
     let hooks = vec![
         ("panic", PCHook::EndFaliure),
         ("panic_cold_explicit", PCHook::EndFaliure),
+        ("panic_bounds_check", PCHook::EndFaliure),
         ("suppress_path", PCHook::Suppress),
     ];
 
