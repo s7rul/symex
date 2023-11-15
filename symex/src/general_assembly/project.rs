@@ -8,7 +8,7 @@ use tracing::debug;
 use crate::{general_assembly::translator::Translatable, memory::MemoryError};
 
 use super::{
-    executor, instruction::Instruction, state::GAState, DataHalfWord, DataWord, Endianness,
+    instruction::Instruction, state::GAState, DataHalfWord, DataWord, Endianness,
     RawDataWord, Result as SuperResult, WordSize,
 };
 

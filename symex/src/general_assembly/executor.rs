@@ -6,7 +6,7 @@ use tracing::{debug, trace};
 
 use crate::{
     elf_util::{ExpressionType, Variable},
-    general_assembly::{instruction::CycleCount, path_selection::Path, state::HookOrInstruction},
+    general_assembly::{path_selection::Path, state::HookOrInstruction},
     smt::{DExpr, SolverError},
 };
 
