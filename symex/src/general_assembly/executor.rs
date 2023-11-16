@@ -898,6 +898,52 @@ mod test {
         assert_eq!(r0_value, 41);
     }
 
+
+    #[test]
+    fn test_adc() {
+        let mut vm = setup_test_vm();
+        let project = vm.project;
+        let mut executor =
+            GAExecutor::from_state(vm.paths.get_path().unwrap().state, &mut vm, project);
+        let mut local = HashMap::new();
+
+        let imm_42 = Operand::Immidiate(DataWord::Word32(42));
+        let imm_12 = Operand::Immidiate(DataWord::Word32(12));
+        let imm_umax = Operand::Immidiate(DataWord::Word32(u32::MAX));
+        let r0 = Operand::Register("R0".to_owned());
+
+        let true_dexpr = executor.state.ctx.from_bool(true);
+        let false_dexpr = executor.state.ctx.from_bool(false);
+
+        // test normal add
+        executor.state.set_flag("C".to_owned(), false_dexpr.clone());
+        let operation = Operation::Adc { destination: r0.clone(), operand1: imm_42.clone(), operand2: imm_12.clone() };
+
+        executor.executer_operation(&operation, &mut local).ok();
+        let result = executor.get_operand_value(&r0, &local).unwrap().get_constant().unwrap();
+
+        assert_eq!(result, 54);
+
+
+        // test add with overflow
+        executor.state.set_flag("C".to_owned(), false_dexpr.clone());
+        let operation = Operation::Adc { destination: r0.clone(), operand1: imm_umax.clone(), operand2: imm_12.clone() };
+
+        executor.executer_operation(&operation, &mut local).ok();
+        let result = executor.get_operand_value(&r0, &local).unwrap().get_constant().unwrap();
+
+        assert_eq!(result, 11);
+
+        // test add with carry in
+        executor.state.set_flag("C".to_owned(), true_dexpr.clone());
+        let operation = Operation::Adc { destination: r0.clone(), operand1: imm_42.clone(), operand2: imm_12.clone() };
+
+        executor.executer_operation(&operation, &mut local).ok();
+        let result = executor.get_operand_value(&r0, &local).unwrap().get_constant().unwrap();
+
+        assert_eq!(result, 55);
+    }
+
     #[test]
     fn test_sub() {
         let mut vm = setup_test_vm();
@@ -971,6 +1017,82 @@ mod test {
             .get_constant()
             .unwrap();
         assert_eq!(r0_value, ((i32::MIN) as u32 + 42) as u64);
+    }
+
+    #[test]
+    fn test_mul() {
+        let mut vm = setup_test_vm();
+        let project = vm.project;
+        let mut executor =
+            GAExecutor::from_state(vm.paths.get_path().unwrap().state, &mut vm, project);
+        let mut local = HashMap::new();
+
+        let r0 = Operand::Register("R0".to_owned());
+        let imm_42 = Operand::Immidiate(DataWord::Word32(42));
+        let imm_minus_42 = Operand::Immidiate(DataWord::Word32(-42i32 as u32));
+        let imm_imin = Operand::Immidiate(DataWord::Word32(i32::MIN as u32));
+        let imm_16 = Operand::Immidiate(DataWord::Word32(16));
+        let imm_minus_16 = Operand::Immidiate(DataWord::Word32(-16i32 as u32));
+
+        // simple multiplication
+        let operation = Operation::Mul {
+            destination: r0.clone(),
+            operand1: imm_42.clone(),
+            operand2: imm_16.clone(),
+        };
+        executor.executer_operation(&operation, &mut local).ok();
+
+        let r0_value = executor
+            .get_operand_value(&r0, &local)
+            .unwrap()
+            .get_constant()
+            .unwrap();
+        assert_eq!(r0_value, 672);
+        
+        // multiplication right minus
+        let operation = Operation::Mul {
+            destination: r0.clone(),
+            operand1: imm_42.clone(),
+            operand2: imm_minus_16.clone(),
+        };
+        executor.executer_operation(&operation, &mut local).ok();
+
+        let r0_value = executor
+            .get_operand_value(&r0, &local)
+            .unwrap()
+            .get_constant()
+            .unwrap();
+        assert_eq!(r0_value as u32, -672i32 as u32);
+
+        // multiplication left minus
+        let operation = Operation::Mul {
+            destination: r0.clone(),
+            operand1: imm_minus_42.clone(),
+            operand2: imm_16.clone(),
+        };
+        executor.executer_operation(&operation, &mut local).ok();
+
+        let r0_value = executor
+            .get_operand_value(&r0, &local)
+            .unwrap()
+            .get_constant()
+            .unwrap();
+        assert_eq!(r0_value as u32, -672i32 as u32);
+
+        // multiplication both minus
+        let operation = Operation::Mul {
+            destination: r0.clone(),
+            operand1: imm_minus_42.clone(),
+            operand2: imm_minus_16.clone(),
+        };
+        executor.executer_operation(&operation, &mut local).ok();
+
+        let r0_value = executor
+            .get_operand_value(&r0, &local)
+            .unwrap()
+            .get_constant()
+            .unwrap();
+        assert_eq!(r0_value, 672);
     }
 
     #[test]
