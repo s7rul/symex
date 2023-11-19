@@ -26,7 +26,7 @@ pub struct GAExecutor<'vm> {
 
 pub enum PathResult {
     Success(Option<DExpr>),
-    Faliure,
+    Faliure(&'static str),
     AssumptionUnsat,
     Suppress,
 }
@@ -61,12 +61,12 @@ impl<'vm> GAExecutor<'vm> {
                         }
                         return Ok(PathResult::Success(None));
                     }
-                    crate::general_assembly::project::PCHook::EndFaliure => {
+                    crate::general_assembly::project::PCHook::EndFaliure(reason) => {
                         debug!("Symbolic execution ended unsuccesfully");
                         for (reg_name, reg_value) in &self.state.registers {
                             debug!("{}: {:?}", reg_name, reg_value.clone().simplify())
                         }
-                        return Ok(PathResult::Faliure);
+                        return Ok(PathResult::Faliure(reason));
                     }
                     crate::general_assembly::project::PCHook::Suppress => {
                         return Ok(PathResult::Suppress);

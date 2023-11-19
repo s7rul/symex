@@ -1,9 +1,12 @@
 //! Translator for the armv6-m instruction set
 
+use std::ops::Add;
+
 use armv6_m_instruction_parser::{
     instructons::{Instruction, Operation},
     registers::{Register, SpecialRegister},
 };
+use regex::Regex;
 use tracing::trace;
 
 use crate::{general_assembly::{
@@ -1619,7 +1622,7 @@ impl Translatable for Instruction {
         }
     }
 
-    fn add_pc_hooks(hooks: &mut Vec<(&str, crate::general_assembly::project::PCHook)>) {
+    fn add_pc_hooks(hooks: &mut Vec<(Regex, crate::general_assembly::project::PCHook)>) {
         let symbolic_sized = |state: &mut GAState| {
             let value_ptr = state.get_register("R0".to_owned()).unwrap();
             let size = state
@@ -1632,9 +1635,10 @@ impl Translatable for Instruction {
                 value_ptr,
                 size
             );
-            let symb_value = state.ctx.unconstrained(size as u32, "any");
+            let name = "any".to_owned() + &state.marked_symbolic.len().to_string();
+            let symb_value = state.ctx.unconstrained(size as u32, &name);
             state.marked_symbolic.push(Variable {
-                name: Some("any".to_owned()),
+                name: Some(name),
                 value: symb_value.clone(),
                 ty: ExpressionType::Integer(size as usize),
             });
@@ -1644,45 +1648,9 @@ impl Translatable for Instruction {
             state.set_register("PC".to_owned(), lr);
             Ok(())
         };
-        hooks.push(("symbolic_size", PCHook::Intrinsic(symbolic_sized)));
+
         hooks.push((
-            "symbolic_size<core::mem::maybe_uninit::MaybeUninit<u8>>",
-            PCHook::Intrinsic(symbolic_sized),
-        ));
-        hooks.push((
-            "symbolic_size<core::mem::maybe_uninit::MaybeUninit<u16>>",
-            PCHook::Intrinsic(symbolic_sized),
-        ));
-        hooks.push((
-            "symbolic_size<core::mem::maybe_uninit::MaybeUninit<u32>>",
-            PCHook::Intrinsic(symbolic_sized),
-        ));
-        hooks.push((
-            "symbolic_size<core::mem::maybe_uninit::MaybeUninit<u64>>",
-            PCHook::Intrinsic(symbolic_sized),
-        ));
-        hooks.push((
-            "symbolic_size<core::mem::maybe_uninit::MaybeUninit<u128>>",
-            PCHook::Intrinsic(symbolic_sized),
-        ));
-        hooks.push((
-            "symbolic_size<core::mem::maybe_uninit::MaybeUninit<i8>>",
-            PCHook::Intrinsic(symbolic_sized),
-        ));
-        hooks.push((
-            "symbolic_size<core::mem::maybe_uninit::MaybeUninit<i16>>",
-            PCHook::Intrinsic(symbolic_sized),
-        ));
-        hooks.push((
-            "symbolic_size<core::mem::maybe_uninit::MaybeUninit<i32>>",
-            PCHook::Intrinsic(symbolic_sized),
-        ));
-        hooks.push((
-            "symbolic_size<core::mem::maybe_uninit::MaybeUninit<i64>>",
-            PCHook::Intrinsic(symbolic_sized),
-        ));
-        hooks.push((
-            "symbolic_size<core::mem::maybe_uninit::MaybeUninit<i128>>",
+            Regex::new(r"^symbolic_size<.+>$").unwrap(),
             PCHook::Intrinsic(symbolic_sized),
         ));
     }

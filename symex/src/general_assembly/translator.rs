@@ -1,6 +1,8 @@
 //! Describes the translator trait.
 //! A translator that translates between machine code and general assembly instructions.
 
+use regex::Regex;
+
 use super::{instruction::Instruction, project::PCHook};
 
 /// A translator
@@ -9,5 +11,5 @@ pub trait Translatable {
     fn translate(&self) -> Instruction;
 
     /// Add target specific or dependant pc hooks.
-    fn add_pc_hooks(hooks: &mut Vec<(&str, PCHook)>);
+    fn add_pc_hooks(hooks: &mut Vec<(Regex, PCHook)>);
 }

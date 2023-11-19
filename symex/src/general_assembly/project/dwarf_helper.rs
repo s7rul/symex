@@ -5,6 +5,7 @@ use std::collections::{HashMap, HashSet};
 use gimli::{
     AttributeValue, DW_AT_low_pc, DW_TAG_subprogram, DebugAbbrev, DebugInfo, DebugPubNames, Reader,
 };
+use regex::Regex;
 use tracing::trace;
 
 use super::{PCHook, PCHooks};
@@ -14,7 +15,7 @@ use super::{PCHook, PCHooks};
 /// It does this by finding the name of the symbol in the dwarf debug data and if it is a function(subprogram)
 /// it adds the address and hook to the hooks list.
 pub fn construct_pc_hooks<R: Reader>(
-    hooks: Vec<(&str, PCHook)>,
+    hooks: Vec<(Regex, PCHook)>,
     pub_names: &DebugPubNames<R>,
     debug_info: &DebugInfo<R>,
     debug_abbrev: &DebugAbbrev<R>,
@@ -26,7 +27,7 @@ pub fn construct_pc_hooks<R: Reader>(
     'inner: while let Some(pubname) = name_items.next().unwrap() {
         let item_name = pubname.name().to_string_lossy().unwrap();
         for (name, hook) in &hooks {
-            if item_name.as_ref() == *name {
+            if name.is_match(item_name.as_ref()) {
                 let unit_offset = pubname.unit_header_offset();
                 let die_offset = pubname.die_offset();
 
@@ -40,7 +41,7 @@ pub fn construct_pc_hooks<R: Reader>(
                         Some(v) => v,
                         None => continue 'inner,
                     };
-                    found_hooks.insert(name);
+                    found_hooks.insert(name.as_str());
 
                     if let AttributeValue::Addr(addr_value) = addr {
                         trace!("found hook for {} att addr: {:#X}", name, addr_value);

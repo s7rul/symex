@@ -20,6 +20,7 @@ object = "0.32.1"
 
 armv6-m-instruction-parser = "0.1"
 gimli = "0.28.0"
+regex = "1.10.2"
 
 [features]
 # Defines a feature named `llvm` that enables symbolic execution at LLVM-IR level

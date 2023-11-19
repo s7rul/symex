@@ -3,6 +3,7 @@ use std::{collections::HashMap, fmt::Debug, fs};
 use armv6_m_instruction_parser::parse;
 use gimli::{DebugAbbrev, DebugInfo, DebugPubNames};
 use object::{Architecture, Object, ObjectSection, ObjectSymbol};
+use regex::Regex;
 use tracing::debug;
 
 use crate::{general_assembly::translator::Translatable, memory::MemoryError};
@@ -33,7 +34,7 @@ pub enum ProjectError {
 pub enum PCHook {
     Continue,
     EndSuccess,
-    EndFaliure,
+    EndFaliure(&'static str),
     Intrinsic(fn(state: &mut GAState) -> SuperResult<()>),
     Suppress,
 }
@@ -76,7 +77,7 @@ impl Project {
         }
     }
 
-    pub fn from_path(path: &str, mut pc_hooks: Vec<(&str, PCHook)>) -> Result<Self> {
+    pub fn from_path(path: &str, mut pc_hooks: Vec<(Regex, PCHook)>) -> Result<Self> {
         debug!("Parsing elf file: {}", path);
         let file = fs::read(path).expect("Unable to open file.");
         let obj_file = match object::File::parse(&*file) {

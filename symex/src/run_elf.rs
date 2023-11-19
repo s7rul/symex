@@ -3,6 +3,7 @@
 //!
 use std::time::Instant;
 
+use regex::Regex;
 use tracing::{debug, info};
 
 use crate::{
@@ -66,10 +67,11 @@ pub fn run_elf(
     let end_pc = 0xFFFFFFFE;
 
     let hooks = vec![
-        ("panic", PCHook::EndFaliure),
-        ("panic_cold_explicit", PCHook::EndFaliure),
-        ("panic_bounds_check", PCHook::EndFaliure),
-        ("suppress_path", PCHook::Suppress),
+        (Regex::new(r"^panic$").unwrap(), PCHook::EndFaliure("panic")),
+        (Regex::new(r"^panic_cold_explicit$").unwrap(), PCHook::EndFaliure("explicit panic")),
+        (Regex::new(r"^panic_bounds_check$").unwrap(), PCHook::EndFaliure("bounds check panic")),
+        (Regex::new(r"^suppress_path$").unwrap(), PCHook::Suppress),
+        (Regex::new(r"^unreachable_unchecked$").unwrap(), PCHook::EndFaliure("reach a unreachable unchecked call undefined behavior")),
     ];
 
     let project = Box::new(general_assembly::project::Project::from_path(path, hooks)?);
@@ -102,8 +104,8 @@ fn run_elf_paths(vm: &mut general_assembly::vm::VM) -> Result<Vec<VisualPathResu
 
         let v_path_result = match path_result {
             general_assembly::executor::PathResult::Success(_v) => PathStatus::Ok(None),
-            general_assembly::executor::PathResult::Faliure => PathStatus::Failed(ErrorReason {
-                error_message: "panic".to_owned(),
+            general_assembly::executor::PathResult::Faliure(reason) => PathStatus::Failed(ErrorReason {
+                error_message: reason.to_owned(),
             }),
             general_assembly::executor::PathResult::AssumptionUnsat => todo!(),
             general_assembly::executor::PathResult::Suppress => todo!(),

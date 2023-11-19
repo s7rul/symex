@@ -29,6 +29,7 @@ rp-pico = "0.7"
 rp2040-hal = { version="0.8", features=["rt", "critical-section-impl"] }
 rp2040-boot2 = "0.3"
 symex_lib = { path = "../crates/symex_lib", version = "1.0" }
+valid_derive = {path = "../crates/valid_derive", version = "1.0"}
 
 # cargo build/run
 [profile.dev]
