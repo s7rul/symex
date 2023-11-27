@@ -3,23 +3,16 @@
 #![feature(type_alias_impl_trait)]
 
 #[rtic::app(
-    device = rp_pico::hal::pac,
+    device = rp2040_hal::pac,
     dispatchers = [TIMER_IRQ_1]
 )]
 mod app {
-    use rp_pico::hal::{
-        clocks, gpio,
-        gpio::pin::bank0::{Gpio2, Gpio25, Gpio3},
-        gpio::pin::PushPullOutput,
-        pac,
-        sio::Sio,
-        watchdog::Watchdog,
-        I2C,
-    };
     use rp_pico::XOSC_CRYSTAL_FREQ;
 
     use defmt::*;
     use defmt_rtt as _;
+
+    use rp2040_hal::{I2C, pac, gpio, gpio::{bank0::{Gpio2, Gpio3, Gpio25}, FunctionSio, SioOutput, PullDown}, Watchdog, clocks, Sio};
 
     use core::mem::MaybeUninit;
     use embedded_hal::digital::v2::{OutputPin, ToggleableOutputPin};
@@ -31,8 +24,8 @@ mod app {
     type I2CBus = I2C<
         pac::I2C1,
         (
-            gpio::Pin<Gpio2, gpio::FunctionI2C>,
-            gpio::Pin<Gpio3, gpio::FunctionI2C>,
+            gpio::Pin<Gpio2, gpio::FunctionI2C, PullDown>,
+            gpio::Pin<Gpio3, gpio::FunctionI2C, PullDown>,
         ),
     >;
 
@@ -41,7 +34,7 @@ mod app {
 
     #[local]
     struct Local {
-        led: gpio::Pin<Gpio25, PushPullOutput>,
+        led: gpio::Pin<Gpio25, FunctionSio<SioOutput>, PullDown>,
         i2c: &'static mut I2CBus,
     }
 
