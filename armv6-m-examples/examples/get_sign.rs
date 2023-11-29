@@ -5,9 +5,9 @@
 //! ```shell
 //! cargo symex --example get_sign --function get_sign
 //! ```
-use symex_lib::Any;
 use panic_halt as _;
 use rp2040_hal::entry;
+use symex_lib::Any;
 
 #[inline(never)]
 pub fn get_sign_inner(v: i32) -> i32 {
@@ -35,6 +35,5 @@ fn main() -> ! {
         let _ = core::ptr::read_volatile(&n);
     }
 
-    loop {
-    }
+    loop {}
 }

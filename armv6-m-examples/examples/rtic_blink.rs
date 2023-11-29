@@ -12,7 +12,14 @@ mod app {
     use defmt::*;
     use defmt_rtt as _;
 
-    use rp2040_hal::{I2C, pac, gpio, gpio::{bank0::{Gpio2, Gpio3, Gpio25}, FunctionSio, SioOutput, PullDown}, Watchdog, clocks, Sio};
+    use rp2040_hal::{
+        clocks, gpio,
+        gpio::{
+            bank0::{Gpio2, Gpio25, Gpio3},
+            FunctionSio, PullDown, SioOutput,
+        },
+        pac, Sio, Watchdog, I2C,
+    };
 
     use core::mem::MaybeUninit;
     use embedded_hal::digital::v2::{OutputPin, ToggleableOutputPin};

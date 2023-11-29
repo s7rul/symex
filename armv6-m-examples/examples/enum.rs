@@ -21,9 +21,9 @@
 //! the helper function `is_valid` when derived will suppress the invalid variant and only allow
 //! the valid variants.
 #![allow(dead_code)]
-use symex_lib::{symbolic, valid, Validate};
 use panic_halt as _;
 use rp2040_hal::entry;
+use symex_lib::{symbolic, valid, Validate};
 
 #[derive(Validate)]
 enum E {
@@ -74,6 +74,5 @@ fn main() -> ! {
         let _ = core::ptr::read_volatile(&n1);
     }
 
-    loop {
-    }
+    loop {}
 }

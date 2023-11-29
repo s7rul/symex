@@ -8,9 +8,9 @@
 //! cargo symex --example bubble_sort
 //! ```
 #![allow(dead_code)]
-use symex_lib::symbolic;
 use panic_halt as _;
 use rp2040_hal::entry;
+use symex_lib::symbolic;
 
 fn bubble_sort(mut vec: [i32; 3]) -> [i32; 3] {
     loop {
@@ -41,6 +41,5 @@ fn test() {
 fn main() -> ! {
     test();
 
-    loop {
-    }
+    loop {}
 }

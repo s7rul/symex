@@ -8,7 +8,7 @@ edition = "2021"
 [dependencies]
 cortex-m = "0.7"
 cortex-m-rt = "0.7"
-embedded-hal = { version = "0.2.5", features = ["unproven"] }
+embedded-hal = { version = "0.2.7", features = ["unproven"] }
 
 defmt = "0.3"
 defmt-rtt = "0.4"
@@ -30,6 +30,7 @@ rp2040-hal = { version="0.9.1", features=["rt", "critical-section-impl"] }
 rp2040-boot2 = "0.3"
 symex_lib = { path = "../crates/symex_lib", version = "1.0" }
 valid_derive = {path = "../crates/valid_derive", version = "1.0"}
+rtic-sync = "1.0.2"
 
 # cargo build/run
 [profile.dev]

@@ -6,9 +6,9 @@
 //! cargo symex --example initial --function foo
 //! ```
 #![allow(dead_code)]
-use symex_lib::Any;
 use panic_halt as _;
 use rp2040_hal::entry;
+use symex_lib::Any;
 
 fn bar(x: i32, y: i32) -> i32 {
     if x > 5 && x + y == 100 {
@@ -21,7 +21,6 @@ fn bar(x: i32, y: i32) -> i32 {
         x / y
     }
 }
-
 
 #[inline(never)]
 #[no_mangle]
@@ -39,6 +38,5 @@ fn main() -> ! {
         let _ = core::ptr::read_volatile(&n);
     }
 
-    loop {
-    }
+    loop {}
 }
