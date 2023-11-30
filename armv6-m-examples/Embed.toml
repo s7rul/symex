@@ -11,6 +11,9 @@ speed = 20000
 
 
 [default.flashing]
+enabled = false
+
+[flash.flashing]
 enabled = true
 
 [default.reset]
