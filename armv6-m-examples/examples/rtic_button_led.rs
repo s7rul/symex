@@ -156,7 +156,6 @@ mod app {
             let now = Timer::now().ticks();
             defmt::info!("message received at: {} delay until: {}", now, delay.ticks());
             Timer::delay_until(delay).await;
-            //Timer::delay(500.millis()).await;
             defmt::info!("check empty");
             if receiver.is_empty() {
                 ctx.shared.debounce.lock(|d| {
@@ -172,42 +171,53 @@ mod app {
     #[task(binds = IO_IRQ_BANK0, priority = 2, shared = [debounce], local = [led_1, led_2, led_3, button, state:u8 = 0, d_sender])]
     fn button_handler(mut ctx: button_handler::Context) {
         let now = Timer::now();
-
+        defmt::info!("button handler");
+        // read button state
         let button_state = ctx.local.button.is_high().unwrap();
+
+        // clear interrupts
+        ctx.local.button.clear_interrupt(gpio::Interrupt::EdgeLow);
+        ctx.local.button.clear_interrupt(gpio::Interrupt::EdgeHigh);
+
+        // check if interrupted because of bounce
         let mut should_return = false;
         ctx.shared.debounce.lock(|d| {
             if *d {
-                //defmt::info!("bounce detected");
+                defmt::info!("bounce detected");
                 should_return = true;
             } else {
                 *d = true;
             }
         });
 
+        // return if bounce detected
         if should_return {
             return;
         }
 
+        // check if pressed or released
         if button_state {
-            ctx.local.button.clear_interrupt(gpio::Interrupt::EdgeHigh);
-
+            // change state
             let s = ctx.local.state;
             *s += 1;
             if *s > 2 {
                 *s = 0;
             }
             defmt::info!("button pressed: state {}, time: {}", *s, now.ticks());
+            // update leds
             handle_leds(ctx.local.led_1, ctx.local.led_2, ctx.local.led_3, *s);
         } else {
-            ctx.local.button.clear_interrupt(gpio::Interrupt::EdgeLow);
+            // do nothing if released
             defmt::info!("Button Low");
         }
 
         // add new delay to channel
-        ctx.local.d_sender.try_send(now + 500.millis()).ok();
+        ctx.local.d_sender.try_send(now + 100.millis()).ok();
         defmt::info!("message sent");
     }
 
+    #[no_mangle]
+    #[inline(never)]
     fn handle_leds(led_1: &mut Led1, led_2: &mut Led2, led_3: &mut Led3, state: u8) {
         match state {
             0 => {
@@ -231,24 +241,15 @@ mod app {
 
     #[task(priority = 1, local = [i2c, led])]
     async fn heartbeat(ctx: heartbeat::Context) {
-        // Loop forever.
-        //
-        // It is important to remember that tasks that loop
-        // forever should have an `await` somewhere in that loop.
-        //
-        // Without the await, the task will never yield back to
-        // the async executor, which means that no other lower or
-        // equal  priority task will be able to run.
+        let mut next_blink = Timer::now();
         loop {
             // Flicker the built-in LED
             _ = ctx.local.led.toggle();
             defmt::info!("blink");
 
-            // Congrats, you can use your i2c and have access to it herearmv6-m-examples/examples/rtic_blink.rs,
-            // now to do something with it!
+            next_blink += 500.millis();
 
-            // Delay for 1 second
-            Timer::delay(500.millis()).await;
+            Timer::delay_until(next_blink).await;
         }
     }
 }
