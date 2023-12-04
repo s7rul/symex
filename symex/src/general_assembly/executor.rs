@@ -898,7 +898,6 @@ mod test {
         assert_eq!(r0_value, 41);
     }
 
-
     #[test]
     fn test_adc() {
         let mut vm = setup_test_vm();
@@ -917,29 +916,52 @@ mod test {
 
         // test normal add
         executor.state.set_flag("C".to_owned(), false_dexpr.clone());
-        let operation = Operation::Adc { destination: r0.clone(), operand1: imm_42.clone(), operand2: imm_12.clone() };
+        let operation = Operation::Adc {
+            destination: r0.clone(),
+            operand1: imm_42.clone(),
+            operand2: imm_12.clone(),
+        };
 
         executor.executer_operation(&operation, &mut local).ok();
-        let result = executor.get_operand_value(&r0, &local).unwrap().get_constant().unwrap();
+        let result = executor
+            .get_operand_value(&r0, &local)
+            .unwrap()
+            .get_constant()
+            .unwrap();
 
         assert_eq!(result, 54);
 
-
         // test add with overflow
         executor.state.set_flag("C".to_owned(), false_dexpr.clone());
-        let operation = Operation::Adc { destination: r0.clone(), operand1: imm_umax.clone(), operand2: imm_12.clone() };
+        let operation = Operation::Adc {
+            destination: r0.clone(),
+            operand1: imm_umax.clone(),
+            operand2: imm_12.clone(),
+        };
 
         executor.executer_operation(&operation, &mut local).ok();
-        let result = executor.get_operand_value(&r0, &local).unwrap().get_constant().unwrap();
+        let result = executor
+            .get_operand_value(&r0, &local)
+            .unwrap()
+            .get_constant()
+            .unwrap();
 
         assert_eq!(result, 11);
 
         // test add with carry in
         executor.state.set_flag("C".to_owned(), true_dexpr.clone());
-        let operation = Operation::Adc { destination: r0.clone(), operand1: imm_42.clone(), operand2: imm_12.clone() };
+        let operation = Operation::Adc {
+            destination: r0.clone(),
+            operand1: imm_42.clone(),
+            operand2: imm_12.clone(),
+        };
 
         executor.executer_operation(&operation, &mut local).ok();
-        let result = executor.get_operand_value(&r0, &local).unwrap().get_constant().unwrap();
+        let result = executor
+            .get_operand_value(&r0, &local)
+            .unwrap()
+            .get_constant()
+            .unwrap();
 
         assert_eq!(result, 55);
     }
@@ -1048,7 +1070,7 @@ mod test {
             .get_constant()
             .unwrap();
         assert_eq!(r0_value, 672);
-        
+
         // multiplication right minus
         let operation = Operation::Mul {
             destination: r0.clone(),

@@ -9,8 +9,8 @@ use tracing::debug;
 use crate::{general_assembly::translator::Translatable, memory::MemoryError};
 
 use super::{
-    instruction::Instruction, state::GAState, DataHalfWord, DataWord, Endianness,
-    RawDataWord, Result as SuperResult, WordSize,
+    instruction::Instruction, state::GAState, DataHalfWord, DataWord, Endianness, RawDataWord,
+    Result as SuperResult, WordSize,
 };
 
 mod dwarf_helper;
