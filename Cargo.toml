@@ -13,3 +13,6 @@ exclude = ["symex-llvm-14-legacy"]
 
 [profile.release]
 debug = true
+
+[patch.crates-io]
+rtic-monotonics = {git = "https://github.com/rtic-rs/rtic"}
