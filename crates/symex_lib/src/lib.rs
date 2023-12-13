@@ -34,6 +34,30 @@ pub fn assume(condition: bool) {
     }
 }
 
+/// Suppresses this path from analysis result
+/// 
+/// The path will still be analyzed but no output will be generated for the path
+/// unless some other error occur before suppress_path is called.
+/// This is a safer option to [`ignore_path`] that will not affect soundness.
+/// 
+/// # Example
+/// ```rust
+/// # use symex_lib::symbolic;
+/// # fn foo() {
+/// #   let mut x = 0;
+/// #   symbolic(&mut x);
+/// if x == 0 {
+///     // This path will be found
+/// } else if x > 2 {
+///     suppress_path();
+///     // This path will be found but ignored.
+/// } else {
+///     panic!();
+///     suppress_path();
+///     // This path will result in a error and will be shown in output.
+/// }
+/// # }
+/// ```
 #[inline(never)]
 fn suppress_path() {
     panic!()
@@ -67,6 +91,7 @@ pub fn symbolic<T>(value: &mut T) {
     symbolic_size(value, size_of::<T>());
 }
 
+#[doc(hidden)]
 #[inline(never)]
 pub extern "C" fn symbolic_size<T>(value: &mut T, mut size: usize) {
     black_box(value);
