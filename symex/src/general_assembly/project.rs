@@ -1,7 +1,7 @@
 use std::{collections::HashMap, fmt::Debug, fs};
 
 use armv6_m_instruction_parser::parse;
-use gimli::{DebugAbbrev, DebugInfo, DebugPubNames};
+use gimli::{DebugAbbrev, DebugInfo, DebugPubNames, DebugStr};
 use object::{Architecture, Object, ObjectSection, ObjectSymbol};
 use regex::Regex;
 use tracing::debug;
@@ -148,6 +148,9 @@ impl Project {
         let debug_abbrev = obj_file.section_by_name(".debug_abbrev").unwrap();
         let debug_abbrev = DebugAbbrev::new(debug_abbrev.data().unwrap(), gimli_endian);
 
+        let debug_str= obj_file.section_by_name(".debug_str").unwrap();
+        let debug_str = DebugStr::new(debug_str.data().unwrap(), gimli_endian);
+
         match architecture {
             Architecture::Arm => {
                 armv6_m_instruction_parser::instructons::Instruction::add_pc_hooks(&mut pc_hooks)
@@ -155,7 +158,8 @@ impl Project {
             _ => todo!(),
         }
 
-        let pc_hooks = construct_pc_hooks(pc_hooks, &debug_pubnames, &debug_info, &debug_abbrev);
+        //let pc_hooks = construct_pc_hooks(pc_hooks, &debug_pubnames, &debug_info, &debug_abbrev);
+        let pc_hooks = construct_pc_hooks_no_index(pc_hooks,  &debug_info, &debug_abbrev, &debug_str);
 
         debug!("Created pc hooks: {:?}", pc_hooks);
 

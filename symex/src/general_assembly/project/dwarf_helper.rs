@@ -3,7 +3,7 @@
 use std::collections::{HashMap, HashSet};
 
 use gimli::{
-    AttributeValue, DW_AT_low_pc, DW_TAG_subprogram, DebugAbbrev, DebugInfo, DebugPubNames, Reader,
+    AttributeValue, DW_AT_low_pc, DW_TAG_subprogram, DebugAbbrev, DebugInfo, DebugPubNames, Reader, DW_AT_name, DebugStr,
 };
 use regex::Regex;
 use tracing::trace;
@@ -54,5 +54,64 @@ pub fn construct_pc_hooks<R: Reader>(
     if found_hooks.len() < hooks.len() {
         println!("Did not find addresses for all hooks.") // fix a proper error here later
     }
+    ret
+}
+
+pub fn construct_pc_hooks_no_index<R: Reader>(
+    hooks: Vec<(Regex, PCHook)>,
+    debug_info: &DebugInfo<R>,
+    debug_abbrev: &DebugAbbrev<R>,
+    debug_str: &DebugStr<R>,
+) -> PCHooks {
+    trace!("Constructing PC hooks");
+    let mut ret: PCHooks = HashMap::new();
+    let mut found_hooks = HashSet::new();
+
+    let mut units = debug_info.units();
+    while let Some(unit) = units.next().unwrap() {
+        let abbrev = unit.abbreviations(debug_abbrev).unwrap();
+        let mut cursor = unit.entries(&abbrev);
+
+        'inner: while let Some((_dept, entry)) = cursor.next_dfs().unwrap() {
+            let tag = entry.tag();
+            if tag != gimli::DW_TAG_subprogram {
+                // is not a function continue the search
+                continue;
+            }
+            let attr = match entry.attr_value(DW_AT_name).unwrap() {
+                Some(a) => a,
+                None => continue,
+            };
+            let entry_name = match attr {
+                AttributeValue::DebugStrRef(s) => {
+                    s
+                },
+                _ => continue,
+            };
+
+            let entry_name = debug_str.get_str(entry_name).unwrap();
+            let name_str = entry_name.to_string().unwrap();
+
+            for (name, hook) in &hooks {
+                if name.is_match(name_str.as_ref()) {
+                    let addr = match entry.attr_value(DW_AT_low_pc).unwrap() {
+                        Some(v) => v,
+                        None => continue 'inner,
+                    };
+                    found_hooks.insert(name.as_str());
+
+                    if let AttributeValue::Addr(addr_value) = addr {
+                        trace!("found hook for {} att addr: {:#X}", name, addr_value);
+                        ret.insert(addr_value, *hook);
+                    }
+                }
+            }
+
+        }
+    }
+    if found_hooks.len() < hooks.len() {
+        println!("Did not find addresses for all hooks.") // fix a proper error here later
+    }
+
     ret
 }
