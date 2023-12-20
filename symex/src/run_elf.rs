@@ -4,11 +4,11 @@
 use std::time::Instant;
 
 use regex::Regex;
-use tracing::{debug, info};
+use tracing::{debug, info, trace};
 
 use crate::{
     elf_util::{ErrorReason, PathStatus, VisualPathResult},
-    general_assembly::{self, executor::PathResult, project::PCHook, GAError},
+    general_assembly::{self, executor::PathResult, project::PCHook, GAError, state::GAState},
     smt::DContext,
 };
 
@@ -64,6 +64,26 @@ pub fn run_elf(
     let context = Box::new(DContext::new());
     let context = Box::leak(context);
 
+    let start_cyclecount = |state: &mut GAState| {
+        state.cycle_count = 0;
+        trace!("Reset the cycle count");
+
+        // jump back to where the function was called from
+        let lr = state.get_register("LR".to_owned()).unwrap();
+        state.set_register("PC".to_owned(), lr);
+        Ok(())
+    };
+    let end_cyclecount = |state: &mut GAState| {
+        // stop counting
+        state.count_cycles = false;
+        trace!("Stopped counting cycles");
+
+        // jump back to where the function was called from
+        let lr = state.get_register("LR".to_owned()).unwrap();
+        state.set_register("PC".to_owned(), lr);
+        Ok(())
+    };
+
     let end_pc = 0xFFFFFFFE;
 
     let hooks = vec![
@@ -81,6 +101,8 @@ pub fn run_elf(
             Regex::new(r"^unreachable_unchecked$").unwrap(),
             PCHook::EndFaliure("reach a unreachable unchecked call undefined behavior"),
         ),
+        (Regex::new(r"^start_cyclecount$").unwrap(), PCHook::Intrinsic(start_cyclecount)),
+        (Regex::new(r"^end_cyclecount$").unwrap(), PCHook::Intrinsic(end_cyclecount)),
     ];
 
     let project = Box::new(general_assembly::project::Project::from_path(path, hooks)?);

@@ -31,6 +31,7 @@ pub struct GAState {
     pub constraints: DSolver,
     pub marked_symbolic: Vec<Variable>,
     pub memory: ArrayMemory,
+    pub count_cycles: bool,
     pub cycle_count: usize,
     pub last_instruction: Option<Instruction>,
     pub last_pc: u64,
@@ -96,6 +97,7 @@ impl GAState {
             has_jumped: false,
             last_instruction: None,
             last_pc: pc_reg,
+            count_cycles: true,
         })
     }
 
@@ -123,6 +125,11 @@ impl GAState {
     }
 
     pub fn increment_cycle_count(&mut self) {
+        // do nothing if cycles should not be counted
+        if !self.count_cycles {
+            return;
+        }
+
         let cycles = match &self.last_instruction {
             Some(i) => match i.max_cycle {
                 super::instruction::CycleCount::Value(v) => v,
@@ -183,6 +190,7 @@ impl GAState {
             has_jumped: false,
             last_instruction: None,
             last_pc: pc_reg,
+            count_cycles: true,
         }
     }
 
