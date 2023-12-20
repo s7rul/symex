@@ -72,6 +72,8 @@ impl<'vm> GAExecutor<'vm> {
                         return Ok(PathResult::Suppress);
                     }
                     crate::general_assembly::project::PCHook::Intrinsic(f) => {
+                        // set last instruction to empty to no count instruction twice
+                        self.state.last_instruction = None;
                         f(&mut self.state)?;
                         continue;
                     }
