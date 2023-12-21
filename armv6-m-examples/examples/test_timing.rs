@@ -21,7 +21,7 @@ use core::arch::asm;
 use rp2040_boot2;
 use rp2040_hal as hal;
 use symex_lib::{any, assume};
-use symex_lib::{start_cyclecount, end_cyclecount};
+use symex_lib::{end_cyclecount, start_cyclecount};
 
 use hal::{
     clocks::{init_clocks_and_plls, Clock},
@@ -58,7 +58,6 @@ fn measure_hw() -> u32 {
     let stop = SYST::get_current();
     start - stop
 }
-
 
 #[entry]
 fn main() -> ! {

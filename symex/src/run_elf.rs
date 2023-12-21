@@ -8,69 +8,21 @@ use tracing::{debug, info, trace};
 
 use crate::{
     elf_util::{ErrorReason, PathStatus, VisualPathResult},
-    general_assembly::{self, executor::PathResult, project::PCHook, GAError, state::GAState},
+    general_assembly::{
+        self, executor::PathResult, project::PCHook, state::GAState, GAError, RunConfig,
+    },
     smt::DContext,
 };
 
-#[derive(Debug)]
-pub struct RunConfig {
-    /// Which paths should the solver be invoked on.
-    pub solve_for: SolveFor,
-
-    /// If concretized inputs should be shown.
-    pub solve_inputs: bool,
-
-    /// If concretized values should be displayed for variables passed to `symbolic`.
-    pub solve_symbolics: bool,
-
-    /// If concretized output values should be shown.
-    pub solve_output: bool,
-}
-
-// impl RunConfig {
-//     /// Determine if the solver should be invoked this specific result.
-//     ///
-//     /// Returns true of all paths should be solved, or if the result variant matches the given
-//     /// `SolveFor`.
-//     fn should_solve(&self, result: &vm::PathResult) -> bool {
-//         match self.solve_for {
-//             SolveFor::All => true,
-//             SolveFor::Error => matches!(result, vm::PathResult::Success(_)),
-//             SolveFor::Success => matches!(result, vm::PathResult::Failure(_)),
-//         }
-//     }
-// }
-
-/// Determine for which types of paths the solver should be invoked on.
-#[derive(Debug)]
-pub enum SolveFor {
-    /// All paths.
-    All,
-
-    /// Paths which return errors. Currently this is both internal executor errors and program errors.
-    Error,
-
-    /// Paths which are sucessful.
-    Success,
-}
-
-/// Run symbolic execution on a elf file where `path` is the path to the ELF file and
-/// `function` is the function the execution starts at.
-pub fn run_elf(
-    path: &str,
-    function: &str,
-    // _cfg: &RunConfig,
-) -> Result<Vec<VisualPathResult>, GAError> {
-    let context = Box::new(DContext::new());
-    let context = Box::leak(context);
-
+fn add_architecture_independent_hooks(cfg: &mut RunConfig) {
+    // intrinsic functions
     let start_cyclecount = |state: &mut GAState| {
         state.cycle_count = 0;
         trace!("Reset the cycle count");
 
         // jump back to where the function was called from
-        let lr = state.get_register("LR".to_owned()).unwrap();
-        state.set_register("PC".to_owned(), lr);
+        let lr = state.get_register("LR".to_owned()).unwrap().unwrap();
+        state.set_register("PC".to_owned(), lr)?;
         Ok(())
     };
     let end_cyclecount = |state: &mut GAState| {
@@ -79,34 +31,53 @@ pub fn run_elf(
         trace!("Stopped counting cycles");
 
         // jump back to where the function was called from
-        let lr = state.get_register("LR".to_owned()).unwrap();
-        state.set_register("PC".to_owned(), lr);
+        let lr = state.get_register("LR".to_owned()).unwrap().unwrap();
+        state.set_register("PC".to_owned(), lr)?;
         Ok(())
     };
 
-    let end_pc = 0xFFFFFFFE;
+    // add all pc hooks
+    cfg.pc_hooks.push((
+        Regex::new(r"^panic_cold_explicit$").unwrap(),
+        PCHook::EndFaliure("explicit panic"),
+    ));
+    cfg.pc_hooks.push((
+        Regex::new(r"^panic_bounds_check$").unwrap(),
+        PCHook::EndFaliure("bounds check panic"),
+    ));
+    cfg.pc_hooks
+        .push((Regex::new(r"^suppress_path$").unwrap(), PCHook::Suppress));
+    cfg.pc_hooks.push((
+        Regex::new(r"^unreachable_unchecked$").unwrap(),
+        PCHook::EndFaliure("reach a unreachable unchecked call undefined behavior"),
+    ));
+    cfg.pc_hooks.push((
+        Regex::new(r"^start_cyclecount$").unwrap(),
+        PCHook::Intrinsic(start_cyclecount),
+    ));
+    cfg.pc_hooks.push((
+        Regex::new(r"^end_cyclecount$").unwrap(),
+        PCHook::Intrinsic(end_cyclecount),
+    ));
+    cfg.pc_hooks
+        .push((Regex::new(r"^panic$").unwrap(), PCHook::EndFaliure("panic")));
+}
 
-    let hooks = vec![
-        (Regex::new(r"^panic$").unwrap(), PCHook::EndFaliure("panic")),
-        (
-            Regex::new(r"^panic_cold_explicit$").unwrap(),
-            PCHook::EndFaliure("explicit panic"),
-        ),
-        (
-            Regex::new(r"^panic_bounds_check$").unwrap(),
-            PCHook::EndFaliure("bounds check panic"),
-        ),
-        (Regex::new(r"^suppress_path$").unwrap(), PCHook::Suppress),
-        (
-            Regex::new(r"^unreachable_unchecked$").unwrap(),
-            PCHook::EndFaliure("reach a unreachable unchecked call undefined behavior"),
-        ),
-        (Regex::new(r"^start_cyclecount$").unwrap(), PCHook::Intrinsic(start_cyclecount)),
-        (Regex::new(r"^end_cyclecount$").unwrap(), PCHook::Intrinsic(end_cyclecount)),
-    ];
+/// Run symbolic execution on a elf file where `path` is the path to the ELF file and
+/// `function` is the function the execution starts at.
+pub fn run_elf(
+    path: &str,
+    function: &str,
+    mut cfg: RunConfig,
+) -> Result<Vec<VisualPathResult>, GAError> {
+    let context = Box::new(DContext::new());
+    let context = Box::leak(context);
 
-    let project = Box::new(general_assembly::project::Project::from_path(path, hooks)?);
+    add_architecture_independent_hooks(&mut cfg);
+
+    let project = Box::new(general_assembly::project::Project::from_path(path, cfg)?);
     let project = Box::leak(project);
+    let end_pc = 0xFFFFFFFE;
     project.add_pc_hook(end_pc, PCHook::EndSuccess);
     debug!("Created project: {:?}", project);
 

@@ -33,6 +33,7 @@ pub struct GAState {
     pub memory: ArrayMemory,
     pub count_cycles: bool,
     pub cycle_count: usize,
+    pub cycle_laps: Vec<(usize, String)>,
     pub last_instruction: Option<Instruction>,
     pub last_pc: u64,
     pub registers: HashMap<String, DExpr>,
@@ -90,6 +91,7 @@ impl GAState {
             marked_symbolic: Vec::new(),
             memory,
             cycle_count: 0,
+            cycle_laps: vec![],
             registers,
             pc_register: pc_reg,
             flags,
@@ -183,6 +185,7 @@ impl GAState {
             marked_symbolic: Vec::new(),
             memory,
             cycle_count: 0,
+            cycle_laps: vec![],
             registers,
             pc_register: pc_reg,
             flags,
@@ -194,7 +197,7 @@ impl GAState {
         }
     }
 
-    pub fn set_register(&mut self, register: String, expr: DExpr) {
+    pub fn set_register(&mut self, register: String, expr: DExpr) -> Result<()> {
         // crude solution should prbobly change
         if register == "PC" {
             let value = match expr.get_constant() {
@@ -203,7 +206,14 @@ impl GAState {
             };
             self.pc_register = value;
         }
-        self.registers.insert(register, expr);
+
+        match self.project.get_register_write_hook(&register) {
+            Some(hook) => hook(self, expr),
+            None => {
+                self.registers.insert(register, expr);
+                Ok(())
+            }
+        }
     }
 
     pub fn set_pc(&mut self, value: u64) {
@@ -214,10 +224,16 @@ impl GAState {
         self.pc_register
     }
 
-    pub fn get_register(&self, register: String) -> Option<DExpr> {
-        match self.registers.get(&register) {
-            Some(v) => Some(v.to_owned()),
-            None => None,
+    pub fn get_register(&mut self, register: String) -> Result<Option<DExpr>> {
+        // check register hooks
+        match self.project.get_register_read_hook(&register) {
+            // run hook if found
+            Some(hook) => Ok(Some(hook(self)?)),
+            // if no hook found read like normal
+            None => match self.registers.get(&register) {
+                Some(v) => Ok(Some(v.to_owned())),
+                None => Ok(None),
+            },
         }
     }
 

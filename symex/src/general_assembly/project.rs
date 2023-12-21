@@ -1,16 +1,16 @@
 use std::{collections::HashMap, fmt::Debug, fs};
 
 use armv6_m_instruction_parser::parse;
-use gimli::{DebugAbbrev, DebugInfo, DebugPubNames, DebugStr};
+use gimli::{DebugAbbrev, DebugInfo, DebugStr};
 use object::{Architecture, Object, ObjectSection, ObjectSymbol};
-use regex::Regex;
 use tracing::debug;
 
-use crate::{general_assembly::translator::Translatable, memory::MemoryError};
+use crate::{general_assembly::translator::Translatable, memory::MemoryError, smt::DExpr};
 
 use super::{
-    instruction::Instruction, state::GAState, DataHalfWord, DataWord, Endianness, RawDataWord,
-    Result as SuperResult, WordSize,
+    instruction::Instruction,
+    state::{self, GAState},
+    DataHalfWord, DataWord, Endianness, RawDataWord, Result as SuperResult, RunConfig, WordSize,
 };
 
 mod dwarf_helper;
@@ -41,6 +41,29 @@ pub enum PCHook {
 
 pub type PCHooks = HashMap<u64, PCHook>;
 
+/// Hook for a register read.
+pub type RegisterReadHook = fn(state: &mut GAState) -> SuperResult<DExpr>;
+pub type RegisterReadHooks = HashMap<String, RegisterReadHook>;
+
+/// Hook for a register write.
+pub type RegisterWriteHook = fn(state: &mut GAState, value: DExpr) -> SuperResult<()>;
+pub type RegisterWriteHooks = HashMap<String, RegisterWriteHook>;
+
+pub enum MemoryHookAddress {
+    Single(u64),
+    Range(u64, u64),
+}
+
+/// Hook for a memory write.
+pub type MemoryWriteHook = fn(state: &mut GAState, address: u64, value: DExpr, bits: u32) -> SuperResult<()>;
+pub type SingleMemoryWriteHooks = HashMap<u64, MemoryWriteHook>;
+pub type RangeMemoryWriteHooks = Vec<((u64, u64), MemoryWriteHook)>;
+
+/// Hook for a memory read.
+pub type MemoryReadHook = fn(state: &mut GAState, address: u64) -> SuperResult<DExpr>;
+pub type SingleMemoryReadHooks = HashMap<u64, MemoryReadHook>;
+pub type RangeMemoryReadHooks = Vec<((u64, u64), MemoryReadHook)>;
+
 /// Holds all data read from the ELF file.
 // Add all read only memmory here later to handle global constants.
 pub struct Project {
@@ -52,6 +75,70 @@ pub struct Project {
     architecture: object::Architecture,
     symtab: HashMap<String, u64>,
     pc_hooks: PCHooks,
+    reg_read_hooks: RegisterReadHooks,
+    reg_write_hooks: RegisterWriteHooks,
+    single_memory_read_hooks: SingleMemoryReadHooks,
+    range_memory_read_hooks: RangeMemoryReadHooks,
+    single_memory_write_hooks: SingleMemoryWriteHooks,
+    range_memory_write_hooks: RangeMemoryWriteHooks,
+}
+
+fn construct_register_read_hooks(hooks: Vec<(String, RegisterReadHook)>) -> RegisterReadHooks {
+    let mut ret = HashMap::new();
+    for (register, hook) in hooks {
+        ret.insert(register, hook);
+    }
+    ret
+}
+
+fn construct_register_write_hooks(hooks: Vec<(String, RegisterWriteHook)>) -> RegisterWriteHooks {
+    let mut ret = HashMap::new();
+
+    for (register, hook) in hooks {
+        ret.insert(register, hook);
+    }
+
+    ret
+}
+
+fn construct_memory_write(
+    hooks: Vec<(MemoryHookAddress, MemoryWriteHook)>,
+) -> (SingleMemoryWriteHooks, RangeMemoryWriteHooks) {
+    let mut single_hooks = HashMap::new();
+    let mut range_hooks = vec![];
+
+    for (address, hook) in hooks {
+        match address {
+            MemoryHookAddress::Single(addr) => {
+                single_hooks.insert(addr, hook);
+            }
+            MemoryHookAddress::Range(start, end) => {
+                range_hooks.push(((start, end), hook));
+            }
+        }
+    }
+
+    (single_hooks, range_hooks)
+}
+
+fn construct_memory_read_hooks(
+    hooks: Vec<(MemoryHookAddress, MemoryReadHook)>,
+) -> (SingleMemoryReadHooks, RangeMemoryReadHooks) {
+    let mut single_hooks = HashMap::new();
+    let mut range_hooks = vec![];
+
+    for (address, hook) in hooks {
+        match address {
+            MemoryHookAddress::Single(addr) => {
+                single_hooks.insert(addr, hook);
+            }
+            MemoryHookAddress::Range(start, end) => {
+                range_hooks.push(((start, end), hook));
+            }
+        }
+    }
+
+    (single_hooks, range_hooks)
 }
 
 impl Project {
@@ -64,6 +151,12 @@ impl Project {
         architecture: object::Architecture,
         symtab: HashMap<String, u64>,
         pc_hooks: PCHooks,
+        reg_read_hooks: RegisterReadHooks,
+        reg_write_hooks: RegisterWriteHooks,
+        single_memory_read_hooks: SingleMemoryReadHooks,
+        range_memory_read_hooks: RangeMemoryReadHooks,
+        single_memory_write_hooks: SingleMemoryWriteHooks,
+        range_memory_write_hooks: RangeMemoryWriteHooks,
     ) -> Project {
         Project {
             program_memory,
@@ -74,10 +167,16 @@ impl Project {
             architecture,
             symtab,
             pc_hooks,
+            reg_read_hooks,
+            reg_write_hooks,
+            single_memory_read_hooks,
+            range_memory_read_hooks,
+            single_memory_write_hooks,
+            range_memory_write_hooks,
         }
     }
 
-    pub fn from_path(path: &str, mut pc_hooks: Vec<(Regex, PCHook)>) -> Result<Self> {
+    pub fn from_path(path: &str, mut cfg: RunConfig) -> Result<Self> {
         debug!("Parsing elf file: {}", path);
         let file = fs::read(path).expect("Unable to open file.");
         let obj_file = match object::File::parse(&*file) {
@@ -142,26 +241,33 @@ impl Project {
         let debug_info = obj_file.section_by_name(".debug_info").unwrap();
         let debug_info = DebugInfo::new(debug_info.data().unwrap(), gimli_endian);
 
-        let debug_pubnames = obj_file.section_by_name(".debug_pubnames").unwrap();
-        let debug_pubnames = DebugPubNames::new(debug_pubnames.data().unwrap(), gimli_endian);
-
         let debug_abbrev = obj_file.section_by_name(".debug_abbrev").unwrap();
         let debug_abbrev = DebugAbbrev::new(debug_abbrev.data().unwrap(), gimli_endian);
 
-        let debug_str= obj_file.section_by_name(".debug_str").unwrap();
+        let debug_str = obj_file.section_by_name(".debug_str").unwrap();
         let debug_str = DebugStr::new(debug_str.data().unwrap(), gimli_endian);
 
         match architecture {
             Architecture::Arm => {
-                armv6_m_instruction_parser::instructons::Instruction::add_pc_hooks(&mut pc_hooks)
+                armv6_m_instruction_parser::instructons::Instruction::add_pc_hooks(
+                    &mut cfg.pc_hooks,
+                )
             }
             _ => todo!(),
         }
 
-        //let pc_hooks = construct_pc_hooks(pc_hooks, &debug_pubnames, &debug_info, &debug_abbrev);
-        let pc_hooks = construct_pc_hooks_no_index(pc_hooks,  &debug_info, &debug_abbrev, &debug_str);
+        let pc_hooks =
+            construct_pc_hooks_no_index(cfg.pc_hooks, &debug_info, &debug_abbrev, &debug_str);
 
         debug!("Created pc hooks: {:?}", pc_hooks);
+
+        let reg_read_hooks = construct_register_read_hooks(cfg.register_read_hooks);
+        let reg_write_hooks = construct_register_write_hooks(cfg.register_write_hooks);
+
+        let (single_memory_write_hooks, range_memory_write_hooks) =
+            construct_memory_write(cfg.memory_write_hooks);
+        let (single_memory_read_hooks, range_memory_read_hooks) =
+            construct_memory_read_hooks(cfg.memory_read_hooks);
 
         Ok(Project {
             start_addr: text_start,
@@ -172,6 +278,12 @@ impl Project {
             program_memory: text_data,
             symtab,
             pc_hooks,
+            reg_read_hooks,
+            reg_write_hooks,
+            single_memory_read_hooks,
+            range_memory_read_hooks,
+            single_memory_write_hooks,
+            range_memory_write_hooks,
         })
     }
 
@@ -181,6 +293,42 @@ impl Project {
 
     pub fn add_pc_hook(&mut self, pc: u64, hook: PCHook) {
         self.pc_hooks.insert(pc, hook);
+    }
+
+    pub fn get_register_read_hook(&self, register: &str) -> Option<RegisterReadHook> {
+        self.reg_read_hooks.get(register).copied()
+    }
+
+    pub fn get_register_write_hook(&self, register: &str) -> Option<RegisterWriteHook> {
+        self.reg_write_hooks.get(register).copied()
+    }
+
+    pub fn get_memory_write_hook(&self, address: u64) -> Option<MemoryWriteHook> {
+        match self.single_memory_write_hooks.get(&address) {
+            Some(hook) => Some(hook.clone()),
+            None => {
+                for ((start, end), hook) in &self.range_memory_write_hooks {
+                    if address >= *start && address < *end {
+                        return Some(hook.to_owned());
+                    }
+                }
+                None
+            }
+        }
+    }
+
+    pub fn get_memory_read_hook(&self, address: u64) -> Option<MemoryReadHook> {
+        match self.single_memory_read_hooks.get(&address) {
+            Some(hook) => Some(hook.clone()),
+            None => {
+                for ((start, end), hook) in &self.range_memory_read_hooks {
+                    if address >= *start && address < *end {
+                        return Some(hook.to_owned());
+                    }
+                }
+                None
+            }
+        }
     }
 
     pub fn address_in_range(&self, address: u64) -> bool {
