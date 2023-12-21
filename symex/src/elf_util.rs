@@ -35,6 +35,9 @@ pub struct VisualPathResult {
 
     /// the maximum number of clock cycles the path can contain
     pub max_cycles: usize,
+    
+    /// cycle counts at marked events
+    pub cycle_laps: Vec<(usize, String)>
 }
 
 fn elf_get_values<'a, I>(vars: I, state: &GAState) -> Result<Vec<Variable>, GAError>
@@ -80,6 +83,7 @@ impl VisualPathResult {
             end_state,
             instruction_count: state.get_instruction_count(),
             max_cycles: state.cycle_count,
+            cycle_laps: state.cycle_laps.clone(),
         })
     }
 }
