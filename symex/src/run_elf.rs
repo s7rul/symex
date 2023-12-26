@@ -65,6 +65,7 @@ fn add_architecture_independent_hooks(cfg: &mut RunConfig) {
 
 /// Run symbolic execution on a elf file where `path` is the path to the ELF file and
 /// `function` is the function the execution starts at.
+/// `cfg` can be used to configure how the execution is carried out.
 pub fn run_elf(
     path: &str,
     function: &str,

@@ -44,6 +44,7 @@ pub struct GAState {
 }
 
 impl GAState {
+    /// Create a new state.
     pub fn new(
         ctx: &'static DContext,
         project: &'static Project,
@@ -111,7 +112,7 @@ impl GAState {
         self.has_jumped = true;
     }
 
-    /// Indicates if the last executed instruction has a conditional branch that branched.
+    /// Indicates if the last executed instruction was a conditional branch that branched.
     pub fn get_has_jumped(&self) -> bool {
         self.has_jumped
     }
@@ -126,6 +127,7 @@ impl GAState {
         self.instruction_counter
     }
 
+    /// Increment the cycle counter with the cycle count of the last instruction.
     pub fn increment_cycle_count(&mut self) {
         // do nothing if cycles should not be counted
         if !self.count_cycles {
@@ -147,10 +149,12 @@ impl GAState {
         self.cycle_count += cycles;
     }
 
+    /// Update the last instruction that was executed.
     pub fn set_last_instruction(&mut self, instruction: Instruction) {
         self.last_instruction = Some(instruction);
     }
 
+    /// Create a state used for testing.
     pub fn create_test_state(
         project: &'static Project,
         ctx: &'static DContext,
@@ -197,6 +201,7 @@ impl GAState {
         }
     }
 
+    /// Set a value to a register.
     pub fn set_register(&mut self, register: String, expr: DExpr) -> Result<()> {
         // crude solution should prbobly change
         if register == "PC" {
@@ -216,14 +221,7 @@ impl GAState {
         }
     }
 
-    pub fn set_pc(&mut self, value: u64) {
-        self.pc_register = value
-    }
-
-    pub fn get_pc(&self) -> u64 {
-        self.pc_register
-    }
-
+    /// Get the value stored at a register.
     pub fn get_register(&mut self, register: String) -> Result<Option<DExpr>> {
         // check register hooks
         match self.project.get_register_read_hook(&register) {
@@ -237,11 +235,13 @@ impl GAState {
         }
     }
 
+    /// Set the value of a flag.
     pub fn set_flag(&mut self, flag: String, expr: DExpr) {
         trace!("flag {} set to {:?}", flag, expr);
         self.flags.insert(flag, expr);
     }
 
+    /// Get the value of a flag.
     pub fn get_flag(&mut self, flag: String) -> Option<DExpr> {
         match self.flags.get(&flag) {
             Some(v) => Some(v.to_owned()),
@@ -249,6 +249,7 @@ impl GAState {
         }
     }
 
+    /// Get the expression for a condition based on the current flag values.
     pub fn get_expr(&mut self, condition: &Condition) -> Result<DExpr> {
         Ok(match condition {
             Condition::EQ => self.get_flag("Z".to_owned()).unwrap(),
@@ -295,6 +296,7 @@ impl GAState {
         })
     }
 
+    /// Get the next instruction based on the address in the PC register.
     pub fn get_next_instruction(&self) -> Result<HookOrInstruction> {
         let pc = self.pc_register & !(0b1); // Not applicable for all architectures TODO: Fix this.;
         match self.project.get_pc_hook(pc) {
@@ -313,6 +315,7 @@ impl GAState {
         Ok(self.memory.write(address, value)?)
     }
 
+    /// Read a word form memory. Will respect the endianness of the project.
     pub fn read_word_from_memory(&self, address: &DExpr) -> Result<DExpr> {
         match address.get_constant() {
             Some(address_const) => {
@@ -343,6 +346,7 @@ impl GAState {
         }
     }
 
+    /// Write a word to memory. Will respect the endianess of the project.
     pub fn write_word_to_memory(&mut self, address: &DExpr, value: DExpr) -> Result<()> {
         match address.get_constant() {
             Some(address_const) => {

@@ -59,6 +59,7 @@ where
 }
 
 impl VisualPathResult {
+    /// Creates a result from a state.
     pub fn from_state(
         state: GAState,
         path_num: usize,
