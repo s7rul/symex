@@ -76,7 +76,7 @@ pub fn run_elf(
 
     add_architecture_independent_hooks(&mut cfg);
 
-    let project = Box::new(general_assembly::project::Project::from_path(path, cfg)?);
+    let project = Box::new(general_assembly::project::Project::from_path(path, &cfg)?);
     let project = Box::leak(project);
     let end_pc = 0xFFFFFFFE;
     project.add_pc_hook(end_pc, PCHook::EndSuccess);
@@ -85,11 +85,14 @@ pub fn run_elf(
     info!("create VM");
     let mut vm = general_assembly::vm::VM::new(project, context, function, end_pc)?;
 
-    run_elf_paths(&mut vm)
+    run_elf_paths(&mut vm, &cfg)
 }
 
 /// Runs all paths in the vm
-fn run_elf_paths(vm: &mut general_assembly::vm::VM) -> Result<Vec<VisualPathResult>, GAError> {
+fn run_elf_paths(
+    vm: &mut general_assembly::vm::VM,
+    cfg: &RunConfig,
+) -> Result<Vec<VisualPathResult>, GAError> {
     let mut path_num = 0;
     let start = Instant::now();
     let mut path_results = vec![];
@@ -117,7 +120,10 @@ fn run_elf_paths(vm: &mut general_assembly::vm::VM) -> Result<Vec<VisualPathResu
         };
 
         let result = VisualPathResult::from_state(state, path_num, v_path_result)?;
-        println!("{}", result);
+
+        if cfg.show_path_results {
+            println!("{}", result);
+        }
         path_results.push(result);
     }
     println!("time: {:?}", start.elapsed());

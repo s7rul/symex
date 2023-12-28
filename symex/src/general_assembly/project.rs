@@ -49,6 +49,7 @@ pub type RegisterReadHooks = HashMap<String, RegisterReadHook>;
 pub type RegisterWriteHook = fn(state: &mut GAState, value: DExpr) -> SuperResult<()>;
 pub type RegisterWriteHooks = HashMap<String, RegisterWriteHook>;
 
+#[derive(Debug, Clone)]
 pub enum MemoryHookAddress {
     Single(u64),
     Range(u64, u64),
@@ -177,7 +178,7 @@ impl Project {
         }
     }
 
-    pub fn from_path(path: &str, mut cfg: RunConfig) -> Result<Self> {
+    pub fn from_path(path: &str, cfg: &RunConfig) -> Result<Self> {
         debug!("Parsing elf file: {}", path);
         let file = fs::read(path).expect("Unable to open file.");
         let obj_file = match object::File::parse(&*file) {
@@ -248,27 +249,27 @@ impl Project {
         let debug_str = obj_file.section_by_name(".debug_str").unwrap();
         let debug_str = DebugStr::new(debug_str.data().unwrap(), gimli_endian);
 
+        let mut pc_hooks = cfg.pc_hooks.clone();
+
         match architecture {
             Architecture::Arm => {
-                armv6_m_instruction_parser::instructons::Instruction::add_pc_hooks(
-                    &mut cfg.pc_hooks,
-                )
+                armv6_m_instruction_parser::instructons::Instruction::add_pc_hooks(&mut pc_hooks)
             }
             _ => todo!(),
         }
 
         let pc_hooks =
-            construct_pc_hooks_no_index(cfg.pc_hooks, &debug_info, &debug_abbrev, &debug_str);
+            construct_pc_hooks_no_index(pc_hooks, &debug_info, &debug_abbrev, &debug_str);
 
         debug!("Created pc hooks: {:?}", pc_hooks);
 
-        let reg_read_hooks = construct_register_read_hooks(cfg.register_read_hooks);
-        let reg_write_hooks = construct_register_write_hooks(cfg.register_write_hooks);
+        let reg_read_hooks = construct_register_read_hooks(cfg.register_read_hooks.clone());
+        let reg_write_hooks = construct_register_write_hooks(cfg.register_write_hooks.clone());
 
         let (single_memory_write_hooks, range_memory_write_hooks) =
-            construct_memory_write(cfg.memory_write_hooks);
+            construct_memory_write(cfg.memory_write_hooks.clone());
         let (single_memory_read_hooks, range_memory_read_hooks) =
-            construct_memory_read_hooks(cfg.memory_read_hooks);
+            construct_memory_read_hooks(cfg.memory_read_hooks.clone());
 
         Ok(Project {
             start_addr: text_start,

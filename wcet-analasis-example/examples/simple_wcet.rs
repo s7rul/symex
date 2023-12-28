@@ -12,6 +12,7 @@ fn main() {
         register_write_hooks: vec![],
         memory_write_hooks: vec![],
         memory_read_hooks: vec![],
+        show_path_results: false,
     };
 
     let results = run_elf(path_to_elf_file, function_name, config).unwrap();

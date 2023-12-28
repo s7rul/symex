@@ -15,21 +15,28 @@ use super::project::{
 
 /// Configures a symbolic execution run.
 pub struct RunConfig {
+    /// Indicate if the result of a completed path should be printed out or not.
+    pub show_path_results: bool,
+
     /// Hooks here will be carried out instead of a instruction at a specified address or addresses.
     /// This address (or addresses) is determined by finding all subprogram items in the dwarf data that matches the here provided regular expression and taking the starting address from these.
     pub pc_hooks: Vec<(Regex, PCHook)>,
+
     /// A register read hook will run a function instead of reading from a specified register.
     /// There can only be one hook on a single register.
     pub register_read_hooks: Vec<(String, RegisterReadHook)>,
+
     /// A register write hook will run a function instead of writing to a specified register.
     /// There can only be one hook on a single register.
     pub register_write_hooks: Vec<(String, RegisterWriteHook)>,
+
     /// A memory write hook will run a function instead of writing to a single address or range of addresses.
     /// There can only be one hook on a single address but may be multiple on a range but only one hook will be run.
     /// The hook that will run on multiple possible matches is the hook for the matching single address if it exist
     /// otherwise the first matching range will be executed.
     /// As it is not guaranteed that the order is preserved it is recommended to ensure that there are no overlapping ranges.
     pub memory_write_hooks: Vec<(MemoryHookAddress, MemoryWriteHook)>,
+
     /// A memory read hook will run a function instead of read to a single address or range of addresses.
     /// There can only be one hook on a single address but may be multiple on a range but only one hook will be run.
     /// The hook that will run on multiple possible matches is the hook for the matching single address if it exist
