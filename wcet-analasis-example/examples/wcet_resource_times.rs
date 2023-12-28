@@ -9,6 +9,13 @@ use symex::{
 // is run during instruction execution. Therefore care needs to be taken to measure the critical section
 // correctly.
 
+// To run the example first build the "rtic_simple_resourse" in armv6-m-examples by doing:
+// cd armv6-m-examples
+// cargo build --release --example rtic_simple_resourse
+// cd ..
+// 
+// Then run the analysis by: cargo run -p wcet-analasis-examples --release --example wcet_resource_times
+
 fn main() {
     println!("Simple WCET analasis");
 
