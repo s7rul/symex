@@ -111,10 +111,9 @@ impl<'vm> GAExecutor<'vm> {
         trace!("Getting memmory addr: {:?}", address);
         match address.get_constant() {
             Some(const_addr) => {
-
                 // check for hook and return early
                 if let Some(hook) = self.project.get_memory_read_hook(const_addr) {
-                    return hook(&mut self.state, const_addr)
+                    return hook(&mut self.state, const_addr);
                 }
 
                 if self.project.address_in_range(const_addr) {
@@ -154,7 +153,7 @@ impl<'vm> GAExecutor<'vm> {
             Some(const_addr) => {
                 // check for hook and return early
                 if let Some(hook) = self.project.get_memory_write_hook(const_addr) {
-                    return hook(&mut self.state, const_addr, data, bits)
+                    return hook(&mut self.state, const_addr, data, bits);
                 }
 
                 if self.project.address_in_range(const_addr) {

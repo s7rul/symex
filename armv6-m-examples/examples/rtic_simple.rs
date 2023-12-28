@@ -99,16 +99,8 @@ mod app {
         button.set_interrupt_enabled(gpio::Interrupt::EdgeHigh, true);
         button.set_interrupt_enabled(gpio::Interrupt::EdgeLow, true);
 
-
-
         // Return resources and timer
-        (
-            Shared { debounce: false },
-            Local {
-                led,
-                button,
-            },
-        )
+        (Shared { debounce: false }, Local { led, button })
     }
 
     #[task(binds = IO_IRQ_BANK0, priority = 2, shared = [debounce], local = [button, led])]
@@ -119,5 +111,4 @@ mod app {
             ctx.local.led.set_low();
         }
     }
-
 }

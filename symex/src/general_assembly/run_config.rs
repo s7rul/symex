@@ -2,7 +2,7 @@
 //! Here various types of custom hooks can be added to being able to simulate specific
 //! setups in the symbolic execution. All hooks can be used to exchange generic functionality
 //! with a provided function to carry out case specific functionality.
-//! 
+//!
 //! Writing a hook function can meaningfully alter how the symbolic execution is carried out.
 //! Therefore it is advised that one familiarizes oneself with the inner workings of Symex
 //! executor before writing a hook function.

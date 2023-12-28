@@ -35,9 +35,9 @@ pub struct VisualPathResult {
 
     /// the maximum number of clock cycles the path can contain
     pub max_cycles: usize,
-    
+
     /// cycle counts at marked events
-    pub cycle_laps: Vec<(usize, String)>
+    pub cycle_laps: Vec<(usize, String)>,
 }
 
 fn elf_get_values<'a, I>(vars: I, state: &GAState) -> Result<Vec<Variable>, GAError>

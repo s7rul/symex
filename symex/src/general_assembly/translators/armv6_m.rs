@@ -1,6 +1,5 @@
 //! Translator for the armv6-m instruction set
 
-
 use armv6_m_instruction_parser::{
     instructons::{Instruction, Operation},
     registers::{Register, SpecialRegister},

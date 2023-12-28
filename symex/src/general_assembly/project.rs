@@ -55,7 +55,8 @@ pub enum MemoryHookAddress {
 }
 
 /// Hook for a memory write.
-pub type MemoryWriteHook = fn(state: &mut GAState, address: u64, value: DExpr, bits: u32) -> SuperResult<()>;
+pub type MemoryWriteHook =
+    fn(state: &mut GAState, address: u64, value: DExpr, bits: u32) -> SuperResult<()>;
 pub type SingleMemoryWriteHooks = HashMap<u64, MemoryWriteHook>;
 pub type RangeMemoryWriteHooks = Vec<((u64, u64), MemoryWriteHook)>;
 

@@ -99,16 +99,8 @@ mod app {
         button.set_interrupt_enabled(gpio::Interrupt::EdgeHigh, true);
         button.set_interrupt_enabled(gpio::Interrupt::EdgeLow, true);
 
-
-
         // Return resources and timer
-        (
-            Shared { shared: 0 },
-            Local {
-                led,
-                button,
-            },
-        )
+        (Shared { shared: 0 }, Local { led, button })
     }
 
     #[task(priority = 3, shared = [shared])]
