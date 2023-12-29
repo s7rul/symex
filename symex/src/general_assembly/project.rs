@@ -2,10 +2,12 @@ use std::{collections::HashMap, fmt::Debug, fs};
 
 use armv6_m_instruction_parser::parse;
 use gimli::{DebugAbbrev, DebugInfo, DebugStr};
-use object::{Architecture, Object, ObjectSection, ObjectSymbol};
+use object::{Architecture, File, Object, ObjectSection, ObjectSymbol};
 use tracing::debug;
 
 use crate::{general_assembly::translator::Translatable, memory::MemoryError, smt::DExpr};
+
+use self::segments::{Segment, Segments};
 
 use super::{
     instruction::Instruction,
@@ -15,6 +17,8 @@ use super::{
 
 mod dwarf_helper;
 use dwarf_helper::*;
+
+mod segments;
 
 type Result<T> = std::result::Result<T, ProjectError>;
 
@@ -69,9 +73,7 @@ pub type RangeMemoryReadHooks = Vec<((u64, u64), MemoryReadHook)>;
 /// Holds all data read from the ELF file.
 // Add all read only memmory here later to handle global constants.
 pub struct Project {
-    program_memory: Vec<u8>,
-    start_addr: u64,
-    end_addr: u64,
+    segments: Segments,
     word_size: WordSize,
     endianness: Endianness,
     architecture: object::Architecture,
@@ -161,9 +163,7 @@ impl Project {
         range_memory_write_hooks: RangeMemoryWriteHooks,
     ) -> Project {
         Project {
-            program_memory,
-            start_addr,
-            end_addr,
+            segments: Segments::from_single_segment(program_memory, start_addr, end_addr),
             word_size,
             endianness,
             architecture,
@@ -189,25 +189,7 @@ impl Project {
             }
         };
 
-        let text_section = match obj_file.section_by_name(".text") {
-            Some(section) => section,
-            None => {
-                return Err(ProjectError::UnableToParseElf(
-                    ".text section not found.".to_owned(),
-                ))
-            }
-        };
-
-        let text_start = text_section.address();
-        let text_data = match text_section.data() {
-            Ok(data) => data.to_owned(),
-            Err(_) => {
-                return Err(ProjectError::UnableToParseElf(
-                    "Unable to read .text section.".to_owned(),
-                ))
-            }
-        };
-        let text_end = text_start + text_section.size();
+        let segments = Segments::from_file(&obj_file);
 
         let endianness = if obj_file.is_little_endian() {
             Endianness::Little
@@ -272,12 +254,10 @@ impl Project {
             construct_memory_read_hooks(cfg.memory_read_hooks.clone());
 
         Ok(Project {
-            start_addr: text_start,
-            end_addr: text_end,
+            segments,
             word_size,
             endianness,
             architecture,
-            program_memory: text_data,
             symtab,
             pc_hooks,
             reg_read_hooks,
@@ -334,7 +314,11 @@ impl Project {
     }
 
     pub fn address_in_range(&self, address: u64) -> bool {
-        address >= self.start_addr && address <= self.end_addr
+        if let Some(_) = self.segments.read_raw_bytes(address, 1) {
+            true
+        } else {
+            false
+        }
     }
 
     pub fn get_word_size(&self) -> u32 {
@@ -386,58 +370,53 @@ impl Project {
 
     /// Get a byte of data from program memory.
     pub fn get_byte(&self, address: u64) -> Result<u8> {
-        if address >= self.start_addr && address <= self.end_addr {
-            Ok(self.program_memory[(self.start_addr - address) as usize])
-        } else {
-            Err(MemoryError::OutOfBounds.into())
+        match self.segments.read_raw_bytes(address, 1) {
+            Some(v) => Ok(v[0]),
+            None => Err(MemoryError::OutOfBounds.into()),
         }
     }
 
     fn get_word_internal(&self, address: u64, width: WordSize) -> Result<DataWord> {
-        let mem: &[u8] = self.program_memory.as_ref();
         Ok(match width {
-            WordSize::Bit64 => {
-                let mut data = [0; 8];
-                if address >= self.start_addr && (address + 7) <= self.end_addr {
-                    let address = address - self.start_addr;
-                    data.copy_from_slice(&mem[address as usize..(address + 8) as usize]);
-
+            WordSize::Bit64 => match self.segments.read_raw_bytes(address, 8) {
+                Some(v) => {
+                    let mut data = [0; 8];
+                    data.copy_from_slice(v);
                     DataWord::Word64(match self.endianness {
                         Endianness::Little => u64::from_le_bytes(data),
                         Endianness::Big => u64::from_be_bytes(data),
                     })
-                } else {
+                }
+                None => {
                     return Err(MemoryError::OutOfBounds.into());
                 }
-            }
-            WordSize::Bit32 => {
-                let mut data = [0; 4];
-                if address >= self.start_addr && (address + 3) <= self.end_addr {
-                    let address = address - self.start_addr;
-                    data.copy_from_slice(&mem[address as usize..(address + 4) as usize]);
-
+            },
+            WordSize::Bit32 => match self.segments.read_raw_bytes(address, 4) {
+                Some(v) => {
+                    let mut data = [0; 4];
+                    data.copy_from_slice(v);
                     DataWord::Word32(match self.endianness {
                         Endianness::Little => u32::from_le_bytes(data),
                         Endianness::Big => u32::from_be_bytes(data),
                     })
-                } else {
+                }
+                None => {
                     return Err(MemoryError::OutOfBounds.into());
                 }
-            }
-            WordSize::Bit16 => {
-                let mut data = [0; 2];
-                if address >= self.start_addr && (address + 1) <= self.end_addr {
-                    let address = address - self.start_addr;
-                    data.copy_from_slice(&mem[address as usize..(address + 2) as usize]);
-
+            },
+            WordSize::Bit16 => match self.segments.read_raw_bytes(address, 2) {
+                Some(v) => {
+                    let mut data = [0; 2];
+                    data.copy_from_slice(v);
                     DataWord::Word16(match self.endianness {
                         Endianness::Little => u16::from_le_bytes(data),
                         Endianness::Big => u16::from_be_bytes(data),
                     })
-                } else {
+                }
+                None => {
                     return Err(MemoryError::OutOfBounds.into());
                 }
-            }
+            },
             WordSize::Bit8 => DataWord::Word8(self.get_byte(address)?),
         })
     }
@@ -466,38 +445,37 @@ impl Project {
     }
 
     pub fn get_raw_word(&self, address: u64) -> Result<RawDataWord> {
-        let mem: &[u8] = self.program_memory.as_ref();
         Ok(match self.word_size {
-            WordSize::Bit64 => {
-                let mut data = [0; 8];
-                if address >= self.start_addr && (address + 7) <= self.end_addr {
-                    let address = address - self.start_addr;
-                    data.copy_from_slice(&mem[address as usize..(address + 8) as usize]);
+            WordSize::Bit64 => match self.segments.read_raw_bytes(address, 8) {
+                Some(v) => {
+                    let mut data = [0; 8];
+                    data.copy_from_slice(v);
                     RawDataWord::Word64(data)
-                } else {
+                }
+                None => {
                     return Err(MemoryError::OutOfBounds.into());
                 }
-            }
-            WordSize::Bit32 => {
-                let mut data = [0; 4];
-                if address >= self.start_addr && (address + 3) <= self.end_addr {
-                    let address = address - self.start_addr;
-                    data.copy_from_slice(&mem[address as usize..(address + 4) as usize]);
+            },
+            WordSize::Bit32 => match self.segments.read_raw_bytes(address, 4) {
+                Some(v) => {
+                    let mut data = [0; 4];
+                    data.copy_from_slice(v);
                     RawDataWord::Word32(data)
-                } else {
+                }
+                None => {
                     return Err(MemoryError::OutOfBounds.into());
                 }
-            }
-            WordSize::Bit16 => {
-                let mut data = [0; 2];
-                if address >= self.start_addr && (address + 1) <= self.end_addr {
-                    let address = address - self.start_addr;
-                    data.copy_from_slice(&mem[address as usize..(address + 2) as usize]);
+            },
+            WordSize::Bit16 => match self.segments.read_raw_bytes(address, 2) {
+                Some(v) => {
+                    let mut data = [0; 2];
+                    data.copy_from_slice(v);
                     RawDataWord::Word16(data)
-                } else {
+                }
+                None => {
                     return Err(MemoryError::OutOfBounds.into());
                 }
-            }
+            },
             WordSize::Bit8 => RawDataWord::Word8([self.get_byte(address)?]),
         })
     }
@@ -506,8 +484,6 @@ impl Project {
 impl Debug for Project {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.debug_struct("Project")
-            .field("start_addr", &self.start_addr)
-            .field("end_addr", &self.end_addr)
             .field("word_size", &self.word_size)
             .field("endianness", &self.endianness)
             .field("architecture", &self.architecture)

@@ -109,6 +109,7 @@ fn run_elf(args: Args) -> Result<()> {
         register_write_hooks: vec![],
         memory_read_hooks: vec![],
         memory_write_hooks: vec![],
+        show_path_results: true,
     };
 
     symex::run_elf::run_elf(&path, &function_name, cfg)?;
