@@ -13,7 +13,7 @@ use symex::{
 // cd armv6-m-examples
 // cargo build --release --example rtic_simple_resourse
 // cd ..
-// 
+//
 // Then run the analysis by: cargo run -p wcet-analasis-examples --release --example wcet_resource_times
 
 fn main() {
