@@ -45,9 +45,6 @@ impl<'vm> GAExecutor<'vm> {
 
     pub fn resume_execution(&mut self) -> Result<PathResult> {
         loop {
-            // Add cycles to cycle count
-            self.state.increment_cycle_count();
-
             let instruction = match self.state.get_next_instruction()? {
                 HookOrInstruction::Instruction(v) => v,
                 HookOrInstruction::PcHook(hook) => match hook {
@@ -59,6 +56,7 @@ impl<'vm> GAExecutor<'vm> {
                         for (reg_name, reg_value) in &self.state.registers {
                             debug!("{}: {:?}", reg_name, reg_value.clone().simplify())
                         }
+                        self.state.increment_cycle_count();
                         return Ok(PathResult::Success(None));
                     }
                     crate::general_assembly::project::PCHook::EndFaliure(reason) => {
@@ -66,19 +64,26 @@ impl<'vm> GAExecutor<'vm> {
                         for (reg_name, reg_value) in &self.state.registers {
                             debug!("{}: {:?}", reg_name, reg_value.clone().simplify())
                         }
+                        self.state.increment_cycle_count();
                         return Ok(PathResult::Faliure(reason));
                     }
                     crate::general_assembly::project::PCHook::Suppress => {
+                        self.state.increment_cycle_count();
                         return Ok(PathResult::Suppress);
                     }
                     crate::general_assembly::project::PCHook::Intrinsic(f) => {
+                        f(&mut self.state)?;
+
                         // set last instruction to empty to no count instruction twice
                         self.state.last_instruction = None;
-                        f(&mut self.state)?;
                         continue;
                     }
                 },
             };
+
+            // Add cycles to cycle count
+            self.state.increment_cycle_count();
+
             trace!("executing instruction: {:?}", instruction);
             self.execute_instruction(&instruction)?;
 

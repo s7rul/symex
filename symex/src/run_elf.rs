@@ -28,7 +28,10 @@ fn add_architecture_independent_hooks(cfg: &mut RunConfig) {
     let end_cyclecount = |state: &mut GAState| {
         // stop counting
         state.count_cycles = false;
-        trace!("Stopped counting cycles (cycle count: {})", state.cycle_count);
+        trace!(
+            "Stopped counting cycles (cycle count: {})",
+            state.cycle_count
+        );
 
         // jump back to where the function was called from
         let lr = state.get_register("LR".to_owned()).unwrap().unwrap();
