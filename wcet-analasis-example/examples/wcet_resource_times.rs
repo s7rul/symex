@@ -4,6 +4,8 @@ use symex::{
     smt::DExpr,
 };
 
+use srp::common::Trace;
+
 // This example show how hooks can be used to get at which cycle a resource is locked and unlocked in a simple
 // RTIC application. To keep in mind is that cycles are added after the instruction is executed and the hook
 // is run during instruction execution. Therefore care needs to be taken to measure the critical section
@@ -15,6 +17,40 @@ use symex::{
 // cd ..
 //
 // Then run the analysis by: cargo run -p wcet-analasis-examples --release --example wcet_resource_times
+
+fn make_trace(start: usize, end: usize, laps: &[(usize, String)], id: String) -> Trace {
+    let mut inner = vec![];
+
+    let mut current = "";
+    let mut inner_start = 0;
+    let mut in_inner = false;
+    let mut start_i = 0;
+    for i in 0..laps.len() {
+        if !in_inner {
+            current = &laps[i].1;
+            inner_start = laps[i].0;
+            start_i = i;
+            in_inner = true
+        } else {
+            if current == &laps[i].1 {
+                inner.push(make_trace(
+                    inner_start,
+                    laps[i].0,
+                    &laps[(start_i + 1)..i],
+                    laps[i].1.to_owned(),
+                ));
+                in_inner = false;
+            }
+        }
+    }
+
+    Trace {
+        id,
+        start: start as u32,
+        end: end as u32,
+        inner,
+    }
+}
 
 fn main() {
     println!("Simple WCET analasis");
@@ -28,9 +64,8 @@ fn main() {
     let lock_hook: fn(state: &mut GAState, addr: u64, value: DExpr, bits: u32) -> Result<()> =
         |state, addr, value, bits| {
             // save the current cycle count to the laps vector.
-            state
-                .cycle_laps
-                .push((state.cycle_count, "lock".to_owned()));
+            let val = value.get_constant().unwrap().to_string();
+            state.cycle_laps.push((state.cycle_count, val));
             Ok(())
         };
 
@@ -38,9 +73,8 @@ fn main() {
     let unlock_hook: fn(state: &mut GAState, addr: u64, value: DExpr, bits: u32) -> Result<()> =
         |state, addr, value, bits| {
             // save the current cycle count to the laps vector.
-            state
-                .cycle_laps
-                .push((state.cycle_count, "unlock".to_owned()));
+            let val = value.get_constant().unwrap().to_string();
+            state.cycle_laps.push((state.cycle_count, val));
             Ok(())
         };
 
@@ -66,6 +100,8 @@ fn main() {
     for result in results {
         println!("cycle laps: {:?}", result.cycle_laps);
         max = max.max(result.max_cycles);
+        let trace = make_trace(0, max, &result.cycle_laps, function_name.to_owned());
+        println!("trace: {:?}", trace);
     }
 
     println!(

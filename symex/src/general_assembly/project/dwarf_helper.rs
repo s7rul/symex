@@ -7,7 +7,7 @@ use gimli::{
     DebugPubNames, DebugStr, Reader,
 };
 use regex::Regex;
-use tracing::{trace, debug};
+use tracing::{debug, trace};
 
 use super::{PCHook, PCHooks};
 
