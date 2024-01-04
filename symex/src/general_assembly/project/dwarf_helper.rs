@@ -7,7 +7,7 @@ use gimli::{
     DebugPubNames, DebugStr, Reader,
 };
 use regex::Regex;
-use tracing::trace;
+use tracing::{trace, debug};
 
 use super::{PCHook, PCHooks};
 
@@ -54,7 +54,7 @@ pub fn construct_pc_hooks<R: Reader>(
         }
     }
     if found_hooks.len() < hooks.len() {
-        println!("Did not find addresses for all hooks.") // fix a proper error here later
+        debug!("Did not find addresses for all hooks.")
     }
     ret
 }

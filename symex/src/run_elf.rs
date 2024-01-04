@@ -129,6 +129,8 @@ fn run_elf_paths(
         }
         path_results.push(result);
     }
-    println!("time: {:?}", start.elapsed());
+    if cfg.show_path_results {
+        println!("time: {:?}", start.elapsed());
+    }
     Ok(path_results)
 }
