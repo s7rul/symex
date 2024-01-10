@@ -1589,10 +1589,9 @@ impl Translatable for Instruction {
 
     fn add_pc_hooks(hooks: &mut Vec<(Regex, crate::general_assembly::project::PCHook)>) {
         let symbolic_sized = |state: &mut GAState| {
-            let value_ptr = state.get_register("R0".to_owned())?.unwrap();
+            let value_ptr = state.get_register("R0".to_owned())?;
             let size = state
                 .get_register("R1".to_owned())?
-                .unwrap()
                 .get_constant()
                 .unwrap()
                 * 8;
@@ -1610,7 +1609,7 @@ impl Translatable for Instruction {
             });
             state.memory.write(&value_ptr, symb_value)?;
 
-            let lr = state.get_register("LR".to_owned())?.unwrap();
+            let lr = state.get_register("LR".to_owned())?;
             state.set_register("PC".to_owned(), lr)?;
             Ok(())
         };

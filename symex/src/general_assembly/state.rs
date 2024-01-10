@@ -5,7 +5,7 @@ use std::collections::HashMap;
 use tracing::{debug, trace};
 
 use crate::{
-    elf_util::Variable,
+    elf_util::{Variable, ExpressionType},
     general_assembly::{
         project::{PCHook, ProjectError},
         GAError, Result,
@@ -222,15 +222,28 @@ impl GAState {
     }
 
     /// Get the value stored at a register.
-    pub fn get_register(&mut self, register: String) -> Result<Option<DExpr>> {
+    pub fn get_register(&mut self, register: String) -> Result<DExpr> {
         // check register hooks
         match self.project.get_register_read_hook(&register) {
             // run hook if found
-            Some(hook) => Ok(Some(hook(self)?)),
+            Some(hook) => Ok(hook(self)?),
             // if no hook found read like normal
             None => match self.registers.get(&register) {
-                Some(v) => Ok(Some(v.to_owned())),
-                None => Ok(None),
+                Some(v) => Ok(v.to_owned()),
+                None => {
+                    // If register do not exist yet create it with unconstrained value.
+                    let value = 
+                        self
+                        .ctx
+                        .unconstrained(self.project.get_word_size(), &register);
+                    self.marked_symbolic.push(Variable {
+                        name: Some(register.to_owned()),
+                        value: value.clone(),
+                        ty: ExpressionType::Integer(self.project.get_word_size() as usize),
+                    });
+                    self.registers.insert(register.to_owned(), value.to_owned());
+                    Ok(value)
+                },
             },
         }
     }

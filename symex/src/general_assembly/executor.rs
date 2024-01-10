@@ -145,6 +145,7 @@ impl<'vm> GAExecutor<'vm> {
                 }
             }
             None => {
+                todo!("handle symbolic address better");
                 let data = self.state.memory.read(address, bits)?;
                 Ok(data)
             }
@@ -171,6 +172,7 @@ impl<'vm> GAExecutor<'vm> {
                 }
             }
             None => {
+                todo!("handle symbolic address better");
                 self.state
                     .memory
                     .write(address, data.resize_unsigned(bits))?;
@@ -186,23 +188,7 @@ impl<'vm> GAExecutor<'vm> {
         local: &HashMap<String, DExpr>,
     ) -> Result<DExpr> {
         match operand {
-            Operand::Register(name) => match self.state.get_register(name.to_owned())? {
-                Some(v) => Ok(v),
-                None => {
-                    // If register not writen to asume it can be any value
-                    let value = self
-                        .state
-                        .ctx
-                        .unconstrained(self.project.get_word_size(), name);
-                    self.state.marked_symbolic.push(Variable {
-                        name: Some(name.to_owned()),
-                        value: value.clone(),
-                        ty: ExpressionType::Integer(self.project.get_word_size() as usize),
-                    });
-                    self.state.set_register(name.to_owned(), value.clone())?;
-                    Ok(value)
-                }
-            },
+            Operand::Register(name) => Ok(self.state.get_register(name.to_owned())?),
             Operand::Immidiate(v) => Ok(self.get_dexpr_from_dataword(v.to_owned())),
             Operand::Address(address, width) => {
                 let address = &self.get_dexpr_from_dataword(*address);
@@ -259,7 +245,7 @@ impl<'vm> GAExecutor<'vm> {
     /// Execute a single instruction.
     fn execute_instruction(&mut self, i: &Instruction) -> Result<()> {
         // update last pc
-        let new_pc = self.state.get_register("PC".to_owned())?.unwrap();
+        let new_pc = self.state.get_register("PC".to_owned())?;
         self.state.last_pc = new_pc.get_constant().unwrap();
 
         // Always increment pc before executing the operations
@@ -454,7 +440,7 @@ impl<'vm> GAExecutor<'vm> {
                         self.state.set_has_jumped();
                         Ok(self.get_operand_value(destination, &local)?)
                     }
-                    (false, true) => Ok(self.state.get_register("PC".to_owned())?.unwrap()), // safe to asume PC exist
+                    (false, true) => Ok(self.state.get_register("PC".to_owned())?), // safe to asume PC exist
                     (false, false) => Err(SolverError::Unsat),
                 }?;
 
