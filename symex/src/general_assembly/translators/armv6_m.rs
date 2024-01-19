@@ -1620,12 +1620,14 @@ impl Translatable for Instruction {
         ));
 
         let read_pc: RegisterReadHook = |state| {
+            trace!("Pc read hook");
             let two = state.ctx.from_u64(1, 32);
             let pc = state.get_register("PC".to_owned()).unwrap();
             Ok(pc.add(&two))
         };
 
         let write_pc: RegisterWriteHook = |state, value | {
+            trace!("Pc write hook");
             state.set_register("PC".to_owned(), value)
         };
 

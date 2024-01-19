@@ -205,9 +205,23 @@ impl GAState {
     pub fn set_register(&mut self, register: String, expr: DExpr) -> Result<()> {
         // crude solution should prbobly change
         if register == "PC" {
+                trace!("setting pc");
             let value = match expr.get_constant() {
                 Some(v) => v,
-                None => todo!("handle branch to symbolic address"),
+                None => {
+                    trace!("not a concrete pc try to generate possible values");
+                    let values: Vec<u64> = match self.constraints.get_values(&expr, 500).unwrap() {
+                        crate::smt::Solutions::Exactly(v) => v.iter().map(|n| {match n.get_constant(){
+                            Some(v) => v,
+                            None => todo!("e"),
+                        }}).collect(),
+                        crate::smt::Solutions::AtLeast(v) => todo!(),
+                    };
+                    for v in values {
+                        trace!("Possible PC: {:#X}", v);
+                    }
+                    todo!("handel symbolic branch")
+                }
             };
             self.pc_register = value;
         }
