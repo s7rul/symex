@@ -59,7 +59,7 @@ pub fn assume(condition: bool) {
 /// # }
 /// ```
 #[inline(never)]
-pub fn suppress_path() {
+pub fn suppress_path() -> bool {
     panic!()
 }
 
