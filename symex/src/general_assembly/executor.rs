@@ -145,7 +145,7 @@ impl<'vm> GAExecutor<'vm> {
                 }
             }
             None => {
-                todo!("handle symbolic address better");
+                //todo!("handle symbolic address better");
                 let data = self.state.memory.read(address, bits)?;
                 Ok(data)
             }
