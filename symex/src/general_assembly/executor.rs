@@ -172,7 +172,7 @@ impl<'vm> GAExecutor<'vm> {
                 }
             }
             None => {
-                todo!("handle symbolic address better");
+                //todo!("handle symbolic address better");
                 self.state
                     .memory
                     .write(address, data.resize_unsigned(bits))?;

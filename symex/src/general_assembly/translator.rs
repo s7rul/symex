@@ -3,7 +3,7 @@
 
 use regex::Regex;
 
-use super::{instruction::Instruction, project::PCHook};
+use super::{instruction::Instruction, project::PCHook, RunConfig};
 
 /// A translator
 pub trait Translatable {
@@ -11,5 +11,5 @@ pub trait Translatable {
     fn translate(&self) -> Instruction;
 
     /// Add target specific or dependant pc hooks.
-    fn add_pc_hooks(hooks: &mut Vec<(Regex, PCHook)>);
+    fn add_hooks(cfg: &mut RunConfig);
 }

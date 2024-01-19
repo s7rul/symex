@@ -79,7 +79,7 @@ pub fn run_elf(
 
     add_architecture_independent_hooks(&mut cfg);
 
-    let project = Box::new(general_assembly::project::Project::from_path(path, &cfg)?);
+    let project = Box::new(general_assembly::project::Project::from_path(path, &mut cfg)?);
     let project = Box::leak(project);
     let end_pc = 0xFFFFFFFE;
     project.add_pc_hook(end_pc, PCHook::EndSuccess);

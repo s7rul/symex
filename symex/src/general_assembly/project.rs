@@ -178,7 +178,7 @@ impl Project {
         }
     }
 
-    pub fn from_path(path: &str, cfg: &RunConfig) -> Result<Self> {
+    pub fn from_path(path: &str, cfg: &mut RunConfig) -> Result<Self> {
         debug!("Parsing elf file: {}", path);
         let file = fs::read(path).expect("Unable to open file.");
         let obj_file = match object::File::parse(&*file) {
@@ -231,14 +231,14 @@ impl Project {
         let debug_str = obj_file.section_by_name(".debug_str").unwrap();
         let debug_str = DebugStr::new(debug_str.data().unwrap(), gimli_endian);
 
-        let mut pc_hooks = cfg.pc_hooks.clone();
 
         match architecture {
             Architecture::Arm => {
-                armv6_m_instruction_parser::instructons::Instruction::add_pc_hooks(&mut pc_hooks)
+                armv6_m_instruction_parser::instructons::Instruction::add_hooks(cfg)
             }
             _ => todo!(),
         }
+        let pc_hooks = cfg.pc_hooks.clone();
 
         let pc_hooks =
             construct_pc_hooks_no_index(pc_hooks, &debug_info, &debug_abbrev, &debug_str);

@@ -11,10 +11,10 @@ use crate::{
     elf_util::{ExpressionType, Variable},
     general_assembly::{
         instruction::{Condition, CycleCount, Operand},
-        project::PCHook,
+        project::{PCHook, RegisterReadHook, RegisterWriteHook},
         state::GAState,
         translator::Translatable,
-        DataWord,
+        DataWord, RunConfig,
     },
 };
 
@@ -385,7 +385,7 @@ impl Translatable for Instruction {
                 vec![
                     GAOperation::Add {
                         destination: Operand::Local("addr".to_owned()),
-                        operand1: arm_register_to_ga_operand(&Register::PC),
+                        operand1: Operand::Register("PC".to_owned()),
                         operand2: Operand::Immidiate(DataWord::Word32(2)),
                     },
                     GAOperation::And {
@@ -509,16 +509,16 @@ impl Translatable for Instruction {
             Operation::BLXReg { m } => vec![
                 GAOperation::Move {
                     destination: arm_register_to_ga_operand(&Register::LR),
-                    source: arm_register_to_ga_operand(&Register::PC),
+                    source: Operand::Register("PC".to_owned()),
                 },
                 GAOperation::Move {
-                    destination: arm_register_to_ga_operand(&Register::PC),
+                    destination: Operand::Register("PC".to_owned()),
                     source: arm_register_to_ga_operand(m),
                 },
             ],
             Operation::BX { m } => {
                 let reg = arm_register_to_ga_operand(m);
-                let destination = arm_register_to_ga_operand(&Register::PC);
+                let destination = Operand::Register("PC".to_owned());
                 vec![GAOperation::Move {
                     destination,
                     source: reg,
@@ -1587,7 +1587,7 @@ impl Translatable for Instruction {
         }
     }
 
-    fn add_pc_hooks(hooks: &mut Vec<(Regex, crate::general_assembly::project::PCHook)>) {
+    fn add_hooks(cfg: &mut RunConfig) {
         let symbolic_sized = |state: &mut GAState| {
             let value_ptr = state.get_register("R0".to_owned())?;
             let size = state
@@ -1614,10 +1614,23 @@ impl Translatable for Instruction {
             Ok(())
         };
 
-        hooks.push((
+        cfg.pc_hooks.push((
             Regex::new(r"^symbolic_size<.+>$").unwrap(),
             PCHook::Intrinsic(symbolic_sized),
         ));
+
+        let read_pc: RegisterReadHook = |state| {
+            let two = state.ctx.from_u64(1, 32);
+            let pc = state.get_register("PC".to_owned()).unwrap();
+            Ok(pc.add(&two))
+        };
+
+        let write_pc: RegisterWriteHook = |state, value | {
+            state.set_register("PC".to_owned(), value)
+        };
+
+        cfg.register_read_hooks.push(("PC+".to_owned(), read_pc));
+        cfg.register_write_hooks.push(("PC+".to_owned(), write_pc));
     }
 }
 
@@ -1638,7 +1651,7 @@ fn arm_register_to_ga_operand(reg: &Register) -> Operand {
         Register::R12 => "R12".to_owned(),
         Register::SP => "SP".to_owned(),
         Register::LR => "LR".to_owned(),
-        Register::PC => "PC".to_owned(),
+        Register::PC => "PC+".to_owned(),
     })
 }
 
