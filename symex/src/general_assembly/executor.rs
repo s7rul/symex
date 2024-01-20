@@ -22,6 +22,8 @@ pub struct GAExecutor<'vm> {
     pub vm: &'vm mut VM,
     pub state: GAState,
     pub project: &'static Project,
+    current_instruction: Option<Instruction>,
+    current_operation_index: usize,
 }
 
 pub enum PathResult {
@@ -40,7 +42,13 @@ struct AddWithCarryResult {
 impl<'vm> GAExecutor<'vm> {
     /// Construct a executor from a state.
     pub fn from_state(state: GAState, vm: &'vm mut VM, project: &'static Project) -> Self {
-        Self { vm, state, project }
+        Self {
+            vm,
+            state,
+            project,
+            current_instruction: None,
+            current_operation_index: 0,
+        }
     }
 
     pub fn resume_execution(&mut self) -> Result<PathResult> {
@@ -51,7 +59,7 @@ impl<'vm> GAExecutor<'vm> {
                 self.continue_executing_instruction(&i)?;
                 self.state.continue_in_instruction = None;
                 self.state.set_last_instruction(i.instruction);
-            },
+            }
             None => (),
         }
 
@@ -123,72 +131,52 @@ impl<'vm> GAExecutor<'vm> {
     }
 
     /// Retrieves a smt expression representing value stored at `address` in memory.
-    fn get_memory(&mut self, address: &DExpr, bits: u32) -> Result<DExpr> {
+    fn get_memory(&mut self, address: u64, bits: u32) -> Result<DExpr> {
         trace!("Getting memmory addr: {:?}", address);
-        match address.get_constant() {
-            Some(const_addr) => {
-                // check for hook and return early
-                if let Some(hook) = self.project.get_memory_read_hook(const_addr) {
-                    return hook(&mut self.state, const_addr);
-                }
+        // check for hook and return early
+        if let Some(hook) = self.project.get_memory_read_hook(address) {
+            return hook(&mut self.state, address);
+        }
 
-                if self.project.address_in_range(const_addr) {
-                    if bits == self.project.get_word_size() {
-                        // full word
-                        Ok(self.get_dexpr_from_dataword(self.project.get_word(const_addr)?))
-                    } else if bits == self.project.get_word_size() / 2 {
-                        // half word
-                        Ok(self.get_dexpr_from_dataword(
-                            self.project.get_half_word(const_addr)?.into(),
-                        ))
-                    } else if bits == 8 {
-                        // byte
-                        Ok(self
-                            .state
-                            .ctx
-                            .from_u64(self.project.get_byte(const_addr)? as u64, 8))
-                    } else {
-                        todo!()
-                    }
-                } else {
-                    let data = self.state.memory.read(address, bits)?;
-                    Ok(data)
-                }
+        if self.project.address_in_range(address) {
+            if bits == self.project.get_word_size() {
+                // full word
+                Ok(self.get_dexpr_from_dataword(self.project.get_word(address)?))
+            } else if bits == self.project.get_word_size() / 2 {
+                // half word
+                Ok(self.get_dexpr_from_dataword(self.project.get_half_word(address)?.into()))
+            } else if bits == 8 {
+                // byte
+                Ok(self
+                    .state
+                    .ctx
+                    .from_u64(self.project.get_byte(address)? as u64, 8))
+            } else {
+                todo!()
             }
-            None => {
-                //todo!("handle symbolic address better");
-                let data = self.state.memory.read(address, bits)?;
-                Ok(data)
-            }
+        } else {
+            let symbolic_address = self.state.ctx.from_u64(address, self.project.get_ptr_size());
+            let data = self.state.memory.read(&symbolic_address, bits)?;
+            Ok(data)
         }
     }
 
     /// Sets the memory at `address` to `data`.
-    fn set_memory(&mut self, data: DExpr, address: &DExpr, bits: u32) -> Result<()> {
+    fn set_memory(&mut self, data: DExpr, address: u64, bits: u32) -> Result<()> {
         trace!("Setting memmory addr: {:?}", address);
-        match address.get_constant() {
-            Some(const_addr) => {
-                // check for hook and return early
-                if let Some(hook) = self.project.get_memory_write_hook(const_addr) {
-                    return hook(&mut self.state, const_addr, data, bits);
-                }
+        // check for hook and return early
+        if let Some(hook) = self.project.get_memory_write_hook(address) {
+            return hook(&mut self.state, address, data, bits);
+        }
 
-                if self.project.address_in_range(const_addr) {
-                    Err(super::GAError::WritingToStaticMemoryProhibited)
-                } else {
-                    self.state
-                        .memory
-                        .write(address, data.resize_unsigned(bits))?;
-                    Ok(())
-                }
-            }
-            None => {
-                //todo!("handle symbolic address better");
-                self.state
-                    .memory
-                    .write(address, data.resize_unsigned(bits))?;
-                Ok(())
-            }
+        if self.project.address_in_range(address) {
+            Err(super::GAError::WritingToStaticMemoryProhibited)
+        } else {
+            let symbolic_address = self.state.ctx.from_u64(address, self.project.get_ptr_size());
+            self.state
+                .memory
+                .write(&symbolic_address, data.resize_unsigned(bits))?;
+            Ok(())
         }
     }
 
@@ -202,7 +190,8 @@ impl<'vm> GAExecutor<'vm> {
             Operand::Register(name) => Ok(self.state.get_register(name.to_owned())?),
             Operand::Immidiate(v) => Ok(self.get_dexpr_from_dataword(v.to_owned())),
             Operand::Address(address, width) => {
-                let address = &self.get_dexpr_from_dataword(*address);
+                let address = self.get_dexpr_from_dataword(*address);
+                let address = self.resolve_address(address, &local)?;
                 self.get_memory(address, *width)
             }
             Operand::AddressWithOffset {
@@ -214,7 +203,8 @@ impl<'vm> GAExecutor<'vm> {
             Operand::AddressInLocal(local_name, width) => {
                 let address =
                     self.get_operand_value(&Operand::Local(local_name.to_owned()), local)?;
-                self.get_memory(&address, *width)
+                let address = self.resolve_address(address, &local)?;
+                self.get_memory(address, *width)
             }
         }
     }
@@ -235,11 +225,13 @@ impl<'vm> GAExecutor<'vm> {
             Operand::AddressInLocal(local_name, width) => {
                 let address =
                     self.get_operand_value(&Operand::Local(local_name.to_owned()), local)?;
-                self.set_memory(value, &address, *width)?;
+                let address = self.resolve_address(address, &local)?;
+                self.set_memory(value, address, *width)?;
             }
             Operand::Address(address, width) => {
                 let address = self.get_dexpr_from_dataword(*address);
-                self.set_memory(value, &address, *width)?;
+                let address = self.resolve_address(address, &local)?;
+                self.set_memory(value, address, *width)?;
             }
             Operand::AddressWithOffset {
                 address: _,
@@ -253,14 +245,60 @@ impl<'vm> GAExecutor<'vm> {
         Ok(())
     }
 
+    fn resolve_address(&mut self, address: DExpr, local: &HashMap<String, DExpr>) -> Result<u64> {
+        match &address.get_constant() {
+            Some(addr) => Ok(*addr),
+            None => {
+                // find all possible addresses
+                let addresses = self.state.constraints.get_values(&address, 255)?;
+
+                let addresses = match addresses {
+                    crate::smt::Solutions::Exactly(a) => Ok(a),
+                    crate::smt::Solutions::AtLeast(_) => Err(SolverError::TooManySolutions),
+                }?;
+
+                if addresses.len() == 1 {
+                    return Ok(addresses[0].get_constant().unwrap());
+                } else if addresses.len() == 0 {
+                    return Err(SolverError::Unsat.into());
+                }
+
+                // create paths for all but the first address
+                for addr in &addresses[1..] {
+                    if self.current_operation_index
+                        < self.current_instruction.as_ref().unwrap().operations.len() - 1
+                    {
+                        self.state.continue_in_instruction = Some(ContinueInsideInstruction {
+                            instruction: self.current_instruction.as_ref().unwrap().to_owned(),
+                            index: self.current_operation_index,
+                            local: local.clone(),
+                        })
+                    }
+
+                    let constraint = address._eq(addr);
+                    self.fork(constraint)?;
+                }
+
+                // assert first address and return concrete
+                let concrete_address = &addresses[0];
+                self.state
+                    .constraints
+                    .assert(&address._eq(concrete_address));
+                Ok(concrete_address.get_constant().unwrap())
+            }
+        }
+    }
+
     fn continue_executing_instruction(
         &mut self,
         inst_to_continue: &ContinueInsideInstruction,
     ) -> Result<()> {
         let mut local = inst_to_continue.local.to_owned();
+        self.current_instruction = Some(inst_to_continue.instruction.to_owned());
         for i in inst_to_continue.index..inst_to_continue.instruction.operations.len() {
             let operation = &inst_to_continue.instruction.operations[i];
-            self.executer_operation(operation, &mut local, i, &inst_to_continue.instruction)?;
+            self.current_operation_index = i;
+            self.executer_operation(operation, &mut local)?;
         }
         Ok(())
     }
@@ -289,10 +327,13 @@ impl<'vm> GAExecutor<'vm> {
         // so that forked path count this instruction
         self.state.increment_instruction_count();
 
+        self.current_instruction = Some(i.to_owned());
+
         // initiate local variable storage
         let mut local: HashMap<String, DExpr> = HashMap::new();
         for (n, operation) in i.operations.iter().enumerate() {
-            self.executer_operation(operation, &mut local, n, i)?;
+            self.current_operation_index = n;
+            self.executer_operation(operation, &mut local)?;
         }
 
         Ok(())
@@ -303,8 +344,6 @@ impl<'vm> GAExecutor<'vm> {
         &mut self,
         operation: &Operation,
         local: &mut HashMap<String, DExpr>,
-        index: usize,
-        instruction: &Instruction,
     ) -> Result<()> {
         trace!("Executing operation: {:?}", operation);
         match operation {
@@ -433,6 +472,7 @@ impl<'vm> GAExecutor<'vm> {
                 destination,
                 condition,
             } => {
+                let dest_value = self.get_operand_value(destination, &local)?;
                 let c = self.state.get_expr(condition)?.simplify();
                 trace!("conditional expr: {:?}", c);
 
@@ -440,7 +480,7 @@ impl<'vm> GAExecutor<'vm> {
                 if let Some(constant_c) = c.get_constant_bool() {
                     if constant_c {
                         self.state.set_has_jumped();
-                        let destination = self.get_operand_value(destination, &local)?;
+                        let destination = dest_value;
                         self.state.set_register("PC".to_owned(), destination)?;
                     }
                     return Ok(());
@@ -456,21 +496,23 @@ impl<'vm> GAExecutor<'vm> {
 
                 let destination: DExpr = match (true_possible, false_possible) {
                     (true, true) => {
-                        if index < (instruction.operations.len() - 1) {
+                        if self.current_operation_index
+                            < (self.current_instruction.as_ref().unwrap().operations.len() - 1)
+                        {
                             self.state.continue_in_instruction = Some(ContinueInsideInstruction {
-                                instruction: instruction.to_owned(),
-                                index: index + 1,
+                                instruction: self.current_instruction.as_ref().unwrap().to_owned(),
+                                index: self.current_operation_index + 1,
                                 local: local.to_owned(),
                             });
                         }
                         self.fork(c.not())?;
                         self.state.constraints.assert(&c);
                         self.state.set_has_jumped();
-                        Ok(self.get_operand_value(destination, &local)?)
+                        Ok(dest_value)
                     }
                     (true, false) => {
                         self.state.set_has_jumped();
-                        Ok(self.get_operand_value(destination, &local)?)
+                        Ok(dest_value)
                     }
                     (false, true) => Ok(self.state.get_register("PC".to_owned())?), // safe to asume PC exist
                     (false, false) => Err(SolverError::Unsat),
@@ -691,7 +733,7 @@ mod test {
     use crate::{
         general_assembly::{
             executor::{add_with_carry, GAExecutor},
-            instruction::{Operand, Operation, Instruction, CycleCount},
+            instruction::{CycleCount, Instruction, Operand, Operation},
             project::Project,
             state::GAState,
             vm::VM,
@@ -799,14 +841,13 @@ mod test {
             GAExecutor::from_state(vm.paths.get_path().unwrap().state, &mut vm, project);
         let mut local = HashMap::new();
         let operand_r0 = Operand::Register("R0".to_owned());
-        let dummy_instruction = Instruction { instruction_size: 0, operations: vec![], max_cycle: CycleCount::Value(0) };
 
         // move imm into reg
         let operation = Operation::Move {
             destination: operand_r0.clone(),
             source: Operand::Immidiate(DataWord::Word32(42)),
         };
-        executor.executer_operation(&operation, &mut local, 0, &dummy_instruction).ok();
+        executor.executer_operation(&operation, &mut local).ok();
 
         let r0 = executor
             .get_operand_value(&operand_r0, &local)
@@ -821,7 +862,7 @@ mod test {
             destination: local_r0.clone(),
             source: operand_r0.clone(),
         };
-        executor.executer_operation(&operation, &mut local, 0, &dummy_instruction).ok();
+        executor.executer_operation(&operation, &mut local).ok();
 
         let r0 = executor
             .get_operand_value(&local_r0, &local)
@@ -837,7 +878,7 @@ mod test {
             destination: memmory_op.clone(),
             source: imm.clone(),
         };
-        executor.executer_operation(&operation, &mut local, 0, &dummy_instruction).ok();
+        executor.executer_operation(&operation, &mut local).ok();
 
         let dexpr_addr = executor.get_dexpr_from_dataword(DataWord::Word32(42));
         let in_memmory_value = executor
@@ -854,7 +895,7 @@ mod test {
             destination: local_r0.clone(),
             source: memmory_op.clone(),
         };
-        executor.executer_operation(&operation, &mut local, 0, &dummy_instruction).ok();
+        executor.executer_operation(&operation, &mut local).ok();
 
         let local_value = executor
             .get_operand_value(&local_r0, &local)
@@ -872,7 +913,6 @@ mod test {
         let mut executor =
             GAExecutor::from_state(vm.paths.get_path().unwrap().state, &mut vm, project);
         let mut local = HashMap::new();
-        let dummy_instruction = Instruction { instruction_size: 0, operations: vec![], max_cycle: CycleCount::Value(0) };
 
         let r0 = Operand::Register("R0".to_owned());
         let imm_42 = Operand::Immidiate(DataWord::Word32(42));
@@ -886,7 +926,7 @@ mod test {
             operand1: imm_42.clone(),
             operand2: imm_16.clone(),
         };
-        executor.executer_operation(&operation, &mut local, 0, &dummy_instruction).ok();
+        executor.executer_operation(&operation, &mut local).ok();
 
         let r0_value = executor
             .get_operand_value(&r0, &local)
@@ -901,7 +941,7 @@ mod test {
             operand1: r0.clone(),
             operand2: imm_16.clone(),
         };
-        executor.executer_operation(&operation, &mut local, 0, &dummy_instruction).ok();
+        executor.executer_operation(&operation, &mut local).ok();
 
         let r0_value = executor
             .get_operand_value(&r0, &local)
@@ -916,7 +956,7 @@ mod test {
             operand1: imm_42.clone(),
             operand2: imm_minus70.clone(),
         };
-        executor.executer_operation(&operation, &mut local, 0, &dummy_instruction).ok();
+        executor.executer_operation(&operation, &mut local).ok();
 
         let r0_value = executor
             .get_operand_value(&r0, &local)
@@ -931,7 +971,7 @@ mod test {
             operand1: imm_42.clone(),
             operand2: imm_umax.clone(),
         };
-        executor.executer_operation(&operation, &mut local, 0, &dummy_instruction).ok();
+        executor.executer_operation(&operation, &mut local).ok();
 
         let r0_value = executor
             .get_operand_value(&r0, &local)
@@ -949,7 +989,6 @@ mod test {
             GAExecutor::from_state(vm.paths.get_path().unwrap().state, &mut vm, project);
         let mut local = HashMap::new();
 
-        let dummy_instruction = Instruction { instruction_size: 0, operations: vec![], max_cycle: CycleCount::Value(0) };
         let imm_42 = Operand::Immidiate(DataWord::Word32(42));
         let imm_12 = Operand::Immidiate(DataWord::Word32(12));
         let imm_umax = Operand::Immidiate(DataWord::Word32(u32::MAX));
@@ -966,7 +1005,7 @@ mod test {
             operand2: imm_12.clone(),
         };
 
-        executor.executer_operation(&operation, &mut local, 0, &dummy_instruction).ok();
+        executor.executer_operation(&operation, &mut local).ok();
         let result = executor
             .get_operand_value(&r0, &local)
             .unwrap()
@@ -983,7 +1022,7 @@ mod test {
             operand2: imm_12.clone(),
         };
 
-        executor.executer_operation(&operation, &mut local, 0, &dummy_instruction).ok();
+        executor.executer_operation(&operation, &mut local).ok();
         let result = executor
             .get_operand_value(&r0, &local)
             .unwrap()
@@ -1000,7 +1039,7 @@ mod test {
             operand2: imm_12.clone(),
         };
 
-        executor.executer_operation(&operation, &mut local, 0, &dummy_instruction).ok();
+        executor.executer_operation(&operation, &mut local).ok();
         let result = executor
             .get_operand_value(&r0, &local)
             .unwrap()
@@ -1017,7 +1056,6 @@ mod test {
         let mut executor =
             GAExecutor::from_state(vm.paths.get_path().unwrap().state, &mut vm, project);
         let mut local = HashMap::new();
-        let dummy_instruction = Instruction { instruction_size: 0, operations: vec![], max_cycle: CycleCount::Value(0) };
 
         let r0 = Operand::Register("R0".to_owned());
         let imm_42 = Operand::Immidiate(DataWord::Word32(42));
@@ -1031,7 +1069,7 @@ mod test {
             operand1: imm_42.clone(),
             operand2: imm_16.clone(),
         };
-        executor.executer_operation(&operation, &mut local, 0, &dummy_instruction).ok();
+        executor.executer_operation(&operation, &mut local).ok();
 
         let r0_value = executor
             .get_operand_value(&r0, &local)
@@ -1046,7 +1084,7 @@ mod test {
             operand1: r0.clone(),
             operand2: imm_16.clone(),
         };
-        executor.executer_operation(&operation, &mut local, 0, &dummy_instruction).ok();
+        executor.executer_operation(&operation, &mut local).ok();
 
         let r0_value = executor
             .get_operand_value(&r0, &local)
@@ -1061,7 +1099,7 @@ mod test {
             operand1: imm_42.clone(),
             operand2: imm_minus70.clone(),
         };
-        executor.executer_operation(&operation, &mut local, 0, &dummy_instruction).ok();
+        executor.executer_operation(&operation, &mut local).ok();
 
         let r0_value = executor
             .get_operand_value(&r0, &local)
@@ -1076,7 +1114,7 @@ mod test {
             operand1: imm_42.clone(),
             operand2: imm_imin.clone(),
         };
-        executor.executer_operation(&operation, &mut local, 0, &dummy_instruction).ok();
+        executor.executer_operation(&operation, &mut local).ok();
 
         let r0_value = executor
             .get_operand_value(&r0, &local)
@@ -1093,7 +1131,6 @@ mod test {
         let mut executor =
             GAExecutor::from_state(vm.paths.get_path().unwrap().state, &mut vm, project);
         let mut local = HashMap::new();
-        let dummy_instruction = Instruction { instruction_size: 0, operations: vec![], max_cycle: CycleCount::Value(0) };
 
         let r0 = Operand::Register("R0".to_owned());
         let imm_42 = Operand::Immidiate(DataWord::Word32(42));
@@ -1107,7 +1144,7 @@ mod test {
             operand1: imm_42.clone(),
             operand2: imm_16.clone(),
         };
-        executor.executer_operation(&operation, &mut local, 0, &dummy_instruction).ok();
+        executor.executer_operation(&operation, &mut local).ok();
 
         let r0_value = executor
             .get_operand_value(&r0, &local)
@@ -1122,7 +1159,7 @@ mod test {
             operand1: imm_42.clone(),
             operand2: imm_minus_16.clone(),
         };
-        executor.executer_operation(&operation, &mut local, 0, &dummy_instruction).ok();
+        executor.executer_operation(&operation, &mut local).ok();
 
         let r0_value = executor
             .get_operand_value(&r0, &local)
@@ -1137,7 +1174,7 @@ mod test {
             operand1: imm_minus_42.clone(),
             operand2: imm_16.clone(),
         };
-        executor.executer_operation(&operation, &mut local, 0, &dummy_instruction).ok();
+        executor.executer_operation(&operation, &mut local).ok();
 
         let r0_value = executor
             .get_operand_value(&r0, &local)
@@ -1152,7 +1189,7 @@ mod test {
             operand1: imm_minus_42.clone(),
             operand2: imm_minus_16.clone(),
         };
-        executor.executer_operation(&operation, &mut local, 0, &dummy_instruction).ok();
+        executor.executer_operation(&operation, &mut local).ok();
 
         let r0_value = executor
             .get_operand_value(&r0, &local)
@@ -1169,7 +1206,6 @@ mod test {
         let mut executor =
             GAExecutor::from_state(vm.paths.get_path().unwrap().state, &mut vm, project);
         let mut local = HashMap::new();
-        let dummy_instruction = Instruction { instruction_size: 0, operations: vec![], max_cycle: CycleCount::Value(0) };
 
         let imm_42 = Operand::Immidiate(DataWord::Word32(42));
         let imm_12 = Operand::Immidiate(DataWord::Word32(12));
@@ -1183,7 +1219,7 @@ mod test {
             sub: true,
             carry: false,
         };
-        executor.executer_operation(&operation, &mut local, 0, &dummy_instruction).ok();
+        executor.executer_operation(&operation, &mut local).ok();
 
         let v_flag = executor
             .state
@@ -1200,7 +1236,7 @@ mod test {
             sub: false,
             carry: false,
         };
-        executor.executer_operation(&operation, &mut local, 0, &dummy_instruction).ok();
+        executor.executer_operation(&operation, &mut local).ok();
 
         let v_flag = executor
             .state
@@ -1217,7 +1253,7 @@ mod test {
             sub: true,
             carry: false,
         };
-        executor.executer_operation(&operation, &mut local, 0, &dummy_instruction).ok();
+        executor.executer_operation(&operation, &mut local).ok();
 
         let v_flag = executor
             .state
