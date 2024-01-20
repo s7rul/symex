@@ -1590,11 +1590,7 @@ impl Translatable for Instruction {
     fn add_hooks(cfg: &mut RunConfig) {
         let symbolic_sized = |state: &mut GAState| {
             let value_ptr = state.get_register("R0".to_owned())?;
-            let size = state
-                .get_register("R1".to_owned())?
-                .get_constant()
-                .unwrap()
-                * 8;
+            let size = state.get_register("R1".to_owned())?.get_constant().unwrap() * 8;
             trace!(
                 "trying to create symbolic: addr: {:?}, size: {}",
                 value_ptr,
@@ -1625,9 +1621,7 @@ impl Translatable for Instruction {
             Ok(pc.add(&two))
         };
 
-        let write_pc: RegisterWriteHook = |state, value | {
-            state.set_register("PC".to_owned(), value)
-        };
+        let write_pc: RegisterWriteHook = |state, value| state.set_register("PC".to_owned(), value);
 
         cfg.register_read_hooks.push(("PC+".to_owned(), read_pc));
         cfg.register_write_hooks.push(("PC+".to_owned(), write_pc));

@@ -231,7 +231,6 @@ impl Project {
         let debug_str = obj_file.section_by_name(".debug_str").unwrap();
         let debug_str = DebugStr::new(debug_str.data().unwrap(), gimli_endian);
 
-
         match architecture {
             Architecture::Arm => {
                 armv6_m_instruction_parser::instructons::Instruction::add_hooks(cfg)
