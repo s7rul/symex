@@ -157,6 +157,7 @@ pub fn ignore_path() -> ! {
 ///
 /// It is hard to create a "can be anything" value in pure rust, this function tries to trick the
 /// optimizer into not optimizing `value`.
-fn black_box<T>(value: &mut T) {
+#[doc(hidden)]
+pub fn black_box<T>(value: &mut T) {
     *value = unsafe { core::ptr::read_volatile(value as *mut T) }
 }

@@ -205,7 +205,6 @@ impl GAState {
     pub fn set_register(&mut self, register: String, expr: DExpr) -> Result<()> {
         // crude solution should prbobly change
         if register == "PC" {
-                trace!("setting pc");
             let value = match expr.get_constant() {
                 Some(v) => v,
                 None => {
@@ -217,6 +216,7 @@ impl GAState {
                         }}).collect(),
                         crate::smt::Solutions::AtLeast(v) => todo!(),
                     };
+                    trace!("{} possible PC values", values.len());
                     for v in values {
                         trace!("Possible PC: {:#X}", v);
                     }
