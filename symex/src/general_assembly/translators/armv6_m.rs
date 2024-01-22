@@ -673,7 +673,7 @@ impl Translatable for Instruction {
             Operation::LDRLiteral { t, imm } => vec![
                 GAOperation::Add {
                     destination: Operand::Local("addr".to_owned()),
-                    operand1: arm_register_to_ga_operand(&Register::PC),
+                    operand1: Operand::Register("PC".to_owned()),
                     operand2: Operand::Immidiate(DataWord::Word32(2)),
                 },
                 GAOperation::And {
