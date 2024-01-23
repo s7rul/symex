@@ -32,7 +32,7 @@ fn cycle_count_m0plus_core(operation: &Operation) -> CycleCount { // SIO based o
         if address <= 0xdfffffff && address >= 0xd0000000 {
             1
         } else {
-            0
+            2
         }
     };
     match operation {
