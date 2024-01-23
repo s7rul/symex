@@ -155,7 +155,10 @@ impl<'vm> GAExecutor<'vm> {
                 todo!()
             }
         } else {
-            let symbolic_address = self.state.ctx.from_u64(address, self.project.get_ptr_size());
+            let symbolic_address = self
+                .state
+                .ctx
+                .from_u64(address, self.project.get_ptr_size());
             let data = self.state.memory.read(&symbolic_address, bits)?;
             Ok(data)
         }
@@ -172,7 +175,10 @@ impl<'vm> GAExecutor<'vm> {
         if self.project.address_in_range(address) {
             Err(super::GAError::WritingToStaticMemoryProhibited)
         } else {
-            let symbolic_address = self.state.ctx.from_u64(address, self.project.get_ptr_size());
+            let symbolic_address = self
+                .state
+                .ctx
+                .from_u64(address, self.project.get_ptr_size());
             self.state
                 .memory
                 .write(&symbolic_address, data.resize_unsigned(bits))?;
