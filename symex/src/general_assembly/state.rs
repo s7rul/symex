@@ -45,6 +45,7 @@ pub struct GAState {
     pub last_pc: u64,
     pub registers: HashMap<String, DExpr>,
     pub continue_in_instruction: Option<ContinueInsideInstruction>,
+    pub current_instruction: Option<Instruction>,
     pc_register: u64, // this register is special
     flags: HashMap<String, DExpr>,
     instruction_counter: usize,
@@ -110,6 +111,7 @@ impl GAState {
             last_pc: pc_reg,
             count_cycles: true,
             continue_in_instruction: None,
+            current_instruction: None,
         })
     }
 
@@ -208,6 +210,7 @@ impl GAState {
             last_pc: pc_reg,
             count_cycles: true,
             continue_in_instruction: None,
+            current_instruction: None,
         }
     }
 

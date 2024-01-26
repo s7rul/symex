@@ -22,7 +22,7 @@ pub struct GAExecutor<'vm> {
     pub vm: &'vm mut VM,
     pub state: GAState,
     pub project: &'static Project,
-    current_instruction: Option<Instruction>,
+    //current_instruction: Option<Instruction>,
     current_operation_index: usize,
 }
 
@@ -46,7 +46,7 @@ impl<'vm> GAExecutor<'vm> {
             vm,
             state,
             project,
-            current_instruction: None,
+            //current_instruction: None,
             current_operation_index: 0,
         }
     }
@@ -272,10 +272,10 @@ impl<'vm> GAExecutor<'vm> {
                 // create paths for all but the first address
                 for addr in &addresses[1..] {
                     if self.current_operation_index
-                        < self.current_instruction.as_ref().unwrap().operations.len() - 1
+                        < self.state.current_instruction.as_ref().unwrap().operations.len() - 1
                     {
                         self.state.continue_in_instruction = Some(ContinueInsideInstruction {
-                            instruction: self.current_instruction.as_ref().unwrap().to_owned(),
+                            instruction: self.state.current_instruction.as_ref().unwrap().to_owned(),
                             index: self.current_operation_index,
                             local: local.clone(),
                         })
@@ -300,7 +300,7 @@ impl<'vm> GAExecutor<'vm> {
         inst_to_continue: &ContinueInsideInstruction,
     ) -> Result<()> {
         let mut local = inst_to_continue.local.to_owned();
-        self.current_instruction = Some(inst_to_continue.instruction.to_owned());
+        self.state.current_instruction = Some(inst_to_continue.instruction.to_owned());
         for i in inst_to_continue.index..inst_to_continue.instruction.operations.len() {
             let operation = &inst_to_continue.instruction.operations[i];
             self.current_operation_index = i;
@@ -333,7 +333,7 @@ impl<'vm> GAExecutor<'vm> {
         // so that forked path count this instruction
         self.state.increment_instruction_count();
 
-        self.current_instruction = Some(i.to_owned());
+        self.state.current_instruction = Some(i.to_owned());
 
         // initiate local variable storage
         let mut local: HashMap<String, DExpr> = HashMap::new();
@@ -503,10 +503,10 @@ impl<'vm> GAExecutor<'vm> {
                 let destination: DExpr = match (true_possible, false_possible) {
                     (true, true) => {
                         if self.current_operation_index
-                            < (self.current_instruction.as_ref().unwrap().operations.len() - 1)
+                            < (self.state.current_instruction.as_ref().unwrap().operations.len() - 1)
                         {
                             self.state.continue_in_instruction = Some(ContinueInsideInstruction {
-                                instruction: self.current_instruction.as_ref().unwrap().to_owned(),
+                                instruction: self.state.current_instruction.as_ref().unwrap().to_owned(),
                                 index: self.current_operation_index + 1,
                                 local: local.to_owned(),
                             });
