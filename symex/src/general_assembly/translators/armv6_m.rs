@@ -678,12 +678,12 @@ impl Translatable for Instruction {
                     operand2: Operand::Immidiate(DataWord::Word32(*imm)),
                 },
                 GAOperation::Move {
-                    destination: arm_register_to_ga_operand(t),
-                    source: Operand::AddressInLocal("addr".to_owned(), 32),
-                },
-                GAOperation::Move {
                     destination: Operand::Register("LastAddr".to_owned()),
                     source: Operand::Local("addr".to_owned()),
+                },
+                GAOperation::Move {
+                    destination: arm_register_to_ga_operand(t),
+                    source: Operand::AddressInLocal("addr".to_owned(), 32),
                 },
             ],
             Operation::LDRLiteral { t, imm } => vec![
@@ -703,12 +703,12 @@ impl Translatable for Instruction {
                     operand2: Operand::Immidiate(DataWord::Word32(*imm)),
                 },
                 GAOperation::Move {
-                    destination: arm_register_to_ga_operand(t),
-                    source: Operand::AddressInLocal("addr".to_owned(), 32),
-                },
-                GAOperation::Move {
                     destination: Operand::Register("LastAddr".to_owned()),
                     source: Operand::Local("addr".to_owned()),
+                },
+                GAOperation::Move {
+                    destination: arm_register_to_ga_operand(t),
+                    source: Operand::AddressInLocal("addr".to_owned(), 32),
                 },
             ],
             Operation::LDRReg { m, n, t } => vec![
@@ -718,12 +718,12 @@ impl Translatable for Instruction {
                     operand2: arm_register_to_ga_operand(m),
                 },
                 GAOperation::Move {
-                    destination: arm_register_to_ga_operand(t),
-                    source: Operand::AddressInLocal("addr".to_owned(), 32),
-                },
-                GAOperation::Move {
                     destination: Operand::Register("LastAddr".to_owned()),
                     source: Operand::Local("addr".to_owned()),
+                },
+                GAOperation::Move {
+                    destination: arm_register_to_ga_operand(t),
+                    source: Operand::AddressInLocal("addr".to_owned(), 32),
                 },
             ],
             Operation::LDRBImm { imm, n, t } => vec![
@@ -733,6 +733,10 @@ impl Translatable for Instruction {
                     operand2: Operand::Immidiate(DataWord::Word32(*imm)),
                 },
                 GAOperation::Move {
+                    destination: Operand::Register("LastAddr".to_owned()),
+                    source: Operand::Local("addr".to_owned()),
+                },
+                GAOperation::Move {
                     destination: arm_register_to_ga_operand(t),
                     source: Operand::AddressInLocal("addr".to_owned(), 8),
                 },
@@ -740,10 +744,6 @@ impl Translatable for Instruction {
                     destination: arm_register_to_ga_operand(t),
                     operand: arm_register_to_ga_operand(t),
                     bits: 8,
-                },
-                GAOperation::Move {
-                    destination: Operand::Register("LastAddr".to_owned()),
-                    source: Operand::Local("addr".to_owned()),
                 },
             ],
             Operation::LDRBReg { m, n, t } => vec![
@@ -753,6 +753,10 @@ impl Translatable for Instruction {
                     operand2: arm_register_to_ga_operand(m),
                 },
                 GAOperation::Move {
+                    destination: Operand::Register("LastAddr".to_owned()),
+                    source: Operand::Local("addr".to_owned()),
+                },
+                GAOperation::Move {
                     destination: arm_register_to_ga_operand(t),
                     source: Operand::AddressInLocal("addr".to_owned(), 8),
                 },
@@ -760,10 +764,6 @@ impl Translatable for Instruction {
                     destination: arm_register_to_ga_operand(t),
                     operand: arm_register_to_ga_operand(t),
                     bits: 8,
-                },
-                GAOperation::Move {
-                    destination: Operand::Register("LastAddr".to_owned()),
-                    source: Operand::Local("addr".to_owned()),
                 },
             ],
             Operation::LDRHImm { imm, n, t } => vec![
@@ -773,6 +773,10 @@ impl Translatable for Instruction {
                     operand2: Operand::Immidiate(DataWord::Word32(*imm)),
                 },
                 GAOperation::Move {
+                    destination: Operand::Register("LastAddr".to_owned()),
+                    source: Operand::Local("addr".to_owned()),
+                },
+                GAOperation::Move {
                     destination: arm_register_to_ga_operand(t),
                     source: Operand::AddressInLocal("addr".to_owned(), 16),
                 },
@@ -780,10 +784,6 @@ impl Translatable for Instruction {
                     destination: arm_register_to_ga_operand(t),
                     operand: arm_register_to_ga_operand(t),
                     bits: 16,
-                },
-                GAOperation::Move {
-                    destination: Operand::Register("LastAddr".to_owned()),
-                    source: Operand::Local("addr".to_owned()),
                 },
             ],
             Operation::LDRHReg { m, n, t } => vec![
@@ -793,6 +793,10 @@ impl Translatable for Instruction {
                     operand2: arm_register_to_ga_operand(m),
                 },
                 GAOperation::Move {
+                    destination: Operand::Register("LastAddr".to_owned()),
+                    source: Operand::Local("addr".to_owned()),
+                },
+                GAOperation::Move {
                     destination: arm_register_to_ga_operand(t),
                     source: Operand::AddressInLocal("addr".to_owned(), 16),
                 },
@@ -801,16 +805,16 @@ impl Translatable for Instruction {
                     operand: arm_register_to_ga_operand(t),
                     bits: 16,
                 },
-                GAOperation::Move {
-                    destination: Operand::Register("LastAddr".to_owned()),
-                    source: Operand::Local("addr".to_owned()),
-                },
             ],
             Operation::LDRSBReg { m, n, t } => vec![
                 GAOperation::Add {
                     destination: Operand::Local("addr".to_owned()),
                     operand1: arm_register_to_ga_operand(n),
                     operand2: arm_register_to_ga_operand(m),
+                },
+                GAOperation::Move {
+                    destination: Operand::Register("LastAddr".to_owned()),
+                    source: Operand::Local("addr".to_owned()),
                 },
                 GAOperation::Move {
                     destination: arm_register_to_ga_operand(t),
@@ -821,16 +825,16 @@ impl Translatable for Instruction {
                     operand: arm_register_to_ga_operand(t),
                     bits: 8,
                 },
-                GAOperation::Move {
-                    destination: Operand::Register("LastAddr".to_owned()),
-                    source: Operand::Local("addr".to_owned()),
-                },
             ],
             Operation::LDRSH { m, n, t } => vec![
                 GAOperation::Add {
                     destination: Operand::Local("addr".to_owned()),
                     operand1: arm_register_to_ga_operand(n),
                     operand2: arm_register_to_ga_operand(m),
+                },
+                GAOperation::Move {
+                    destination: Operand::Register("LastAddr".to_owned()),
+                    source: Operand::Local("addr".to_owned()),
                 },
                 GAOperation::Move {
                     destination: arm_register_to_ga_operand(t),
@@ -840,10 +844,6 @@ impl Translatable for Instruction {
                     destination: arm_register_to_ga_operand(t),
                     operand: arm_register_to_ga_operand(t),
                     bits: 8,
-                },
-                GAOperation::Move {
-                    destination: Operand::Register("LastAddr".to_owned()),
-                    source: Operand::Local("addr".to_owned()),
                 },
             ],
             Operation::LSLImm { imm, m, d } => vec![
@@ -1389,12 +1389,12 @@ impl Translatable for Instruction {
                         operand2: imm,
                     },
                     GAOperation::Move {
-                        destination: to_addr,
-                        source: t,
-                    },
-                    GAOperation::Move {
                         destination: Operand::Register("LastAddr".to_owned()),
                         source: Operand::Local("addr".to_owned()),
+                    },
+                    GAOperation::Move {
+                        destination: to_addr,
+                        source: t,
                     },
                 ]
             }
@@ -1412,12 +1412,12 @@ impl Translatable for Instruction {
                         operand2: m,
                     },
                     GAOperation::Move {
-                        destination: to_addr,
-                        source: t,
-                    },
-                    GAOperation::Move {
                         destination: Operand::Register("LastAddr".to_owned()),
                         source: Operand::Local("addr".to_owned()),
+                    },
+                    GAOperation::Move {
+                        destination: to_addr,
+                        source: t,
                     },
                 ]
             }
@@ -1435,12 +1435,12 @@ impl Translatable for Instruction {
                         operand2: imm,
                     },
                     GAOperation::Move {
-                        destination: to_addr,
-                        source: t,
-                    },
-                    GAOperation::Move {
                         destination: Operand::Register("LastAddr".to_owned()),
                         source: Operand::Local("addr".to_owned()),
+                    },
+                    GAOperation::Move {
+                        destination: to_addr,
+                        source: t,
                     },
                 ]
             }
@@ -1458,12 +1458,12 @@ impl Translatable for Instruction {
                         operand2: m,
                     },
                     GAOperation::Move {
-                        destination: to_addr,
-                        source: t,
-                    },
-                    GAOperation::Move {
                         destination: Operand::Register("LastAddr".to_owned()),
                         source: Operand::Local("addr".to_owned()),
+                    },
+                    GAOperation::Move {
+                        destination: to_addr,
+                        source: t,
                     },
                 ]
             }
@@ -1481,12 +1481,12 @@ impl Translatable for Instruction {
                         operand2: imm,
                     },
                     GAOperation::Move {
-                        destination: to_addr,
-                        source: t,
-                    },
-                    GAOperation::Move {
                         destination: Operand::Register("LastAddr".to_owned()),
                         source: Operand::Local("addr".to_owned()),
+                    },
+                    GAOperation::Move {
+                        destination: to_addr,
+                        source: t,
                     },
                 ]
             }
@@ -1504,12 +1504,12 @@ impl Translatable for Instruction {
                         operand2: m,
                     },
                     GAOperation::Move {
-                        destination: to_addr,
-                        source: t,
-                    },
-                    GAOperation::Move {
                         destination: Operand::Register("LastAddr".to_owned()),
                         source: Operand::Local("addr".to_owned()),
+                    },
+                    GAOperation::Move {
+                        destination: to_addr,
+                        source: t,
                     },
                 ]
             }
