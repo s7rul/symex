@@ -34,6 +34,18 @@ symex_lib = { path = "../crates/symex_lib", version = "1.0" }
 valid_derive = { path = "../crates/valid_derive", version = "1.0" }
 rtic-sync = "1.0.2"
 
+# the device under test
+dut = { path = "dut" }
+
+# The `dut` package will use the -Copt-level=0 flag.
+[profile.dev.package.dut]
+opt-level = 0
+
+# The `dut` package will use the -Copt-level=3 flag.
+[profile.release.package.dut]
+opt-level = 3
+
+
 # cargo build/run
 [profile.dev]
 codegen-units = 1
