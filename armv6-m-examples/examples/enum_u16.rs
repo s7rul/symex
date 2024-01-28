@@ -23,7 +23,7 @@
 #![allow(dead_code)]
 use panic_halt as _;
 use rp2040_hal::entry;
-use symex_lib::{symbolic, valid, Validate};
+use symex_lib::{assume, symbolic, valid, Valid, Validate};
 
 use dut::E;
 
@@ -33,6 +33,7 @@ pub fn check() -> u16 {
     let mut u: u16 = 0;
     symbolic(&mut u);
 
+    // constructor like approach
     let e = match u {
         0 => E::A,
         1 => E::B(1),
@@ -51,7 +52,20 @@ pub fn check2() -> u16 {
     let mut e = E::A;
     symbolic(&mut e);
 
+    // defined from valid, not working in release
     valid(&e);
+
+    dut::some_function(&e)
+}
+
+#[inline(never)]
+#[no_mangle]
+pub fn check3() -> u16 {
+    let mut e = E::A;
+    symbolic(&mut e);
+
+    // unfortunately, still does not work in release
+    assume(e.is_valid());
 
     dut::some_function(&e)
 }
@@ -60,10 +74,11 @@ pub fn check2() -> u16 {
 fn main() -> ! {
     let n0 = check();
     let n1 = check2();
-
+    let n2 = check3();
     unsafe {
         let _ = core::ptr::read_volatile(&n0);
         let _ = core::ptr::read_volatile(&n1);
+        let _ = core::ptr::read_volatile(&n2);
     }
 
     loop {}
