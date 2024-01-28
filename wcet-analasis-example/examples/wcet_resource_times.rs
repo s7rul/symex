@@ -107,7 +107,7 @@ fn main() {
     for result in results {
         println!("cycle laps: {:?}", result.cycle_laps);
         max = max.max(result.max_cycles);
-        let trace = make_trace(0, max, &result.cycle_laps, function_name.to_owned());
+        let trace = make_trace(0, result.max_cycles, &result.cycle_laps, function_name.to_owned());
         println!("trace: {:?}", trace);
     }
 
