@@ -22,7 +22,8 @@ type GAInstruction = crate::general_assembly::instruction::Instruction;
 type GAOperation = crate::general_assembly::instruction::Operation;
 type ArmCodition = armv6_m_instruction_parser::conditions::Condition;
 
-fn cycle_count_m0plus_core(operation: &Operation) -> CycleCount { // SIO based on the rp2040 make this configurable later
+fn cycle_count_m0plus_core(operation: &Operation) -> CycleCount {
+    // SIO based on the rp2040 make this configurable later
     let address_max_cycle_function: fn(state: &GAState) -> usize = |state| {
         let address = match state.registers.get("LastAddr").unwrap().get_constant() {
             Some(v) => v,
@@ -81,14 +82,22 @@ fn cycle_count_m0plus_core(operation: &Operation) -> CycleCount { // SIO based o
         }
 
         // \/\/\/\/ Can be one depending on core implementation and address \/\/\/\/
-        Operation::LDRImm { imm: _, n: _, t: _ } => CycleCount::Function(address_max_cycle_function),
+        Operation::LDRImm { imm: _, n: _, t: _ } => {
+            CycleCount::Function(address_max_cycle_function)
+        }
         Operation::LDRLiteral { t: _, imm: _ } => CycleCount::Function(address_max_cycle_function),
         Operation::LDRReg { m: _, n: _, t: _ } => CycleCount::Function(address_max_cycle_function),
-        Operation::LDRBImm { imm: _, n: _, t: _ } => CycleCount::Function(address_max_cycle_function),
+        Operation::LDRBImm { imm: _, n: _, t: _ } => {
+            CycleCount::Function(address_max_cycle_function)
+        }
         Operation::LDRBReg { m: _, n: _, t: _ } => CycleCount::Function(address_max_cycle_function),
-        Operation::LDRHImm { imm: _, n: _, t: _ } => CycleCount::Function(address_max_cycle_function),
+        Operation::LDRHImm { imm: _, n: _, t: _ } => {
+            CycleCount::Function(address_max_cycle_function)
+        }
         Operation::LDRHReg { m: _, n: _, t: _ } => CycleCount::Function(address_max_cycle_function),
-        Operation::LDRSBReg { m: _, n: _, t: _ } => CycleCount::Function(address_max_cycle_function),
+        Operation::LDRSBReg { m: _, n: _, t: _ } => {
+            CycleCount::Function(address_max_cycle_function)
+        }
         Operation::LDRSH { m: _, n: _, t: _ } => CycleCount::Function(address_max_cycle_function),
         // /\/\/\/\ Can be one depending on core implementation and address /\/\/\/\
         Operation::LSLImm { imm: _, m: _, d: _ } => CycleCount::Value(1),
@@ -131,11 +140,17 @@ fn cycle_count_m0plus_core(operation: &Operation) -> CycleCount { // SIO based o
         Operation::STM { n: _, reg_list } => CycleCount::Value(1 + reg_list.len()),
 
         // \/\/\/\/ Can be one depending on core implementation and address \/\/\/\/
-        Operation::STRImm { imm: _, n: _, t: _ } => CycleCount::Function(address_max_cycle_function),
+        Operation::STRImm { imm: _, n: _, t: _ } => {
+            CycleCount::Function(address_max_cycle_function)
+        }
         Operation::STRReg { m: _, n: _, t: _ } => CycleCount::Function(address_max_cycle_function),
-        Operation::STRBImm { imm: _, n: _, t: _ } => CycleCount::Function(address_max_cycle_function),
+        Operation::STRBImm { imm: _, n: _, t: _ } => {
+            CycleCount::Function(address_max_cycle_function)
+        }
         Operation::STRBReg { m: _, n: _, t: _ } => CycleCount::Function(address_max_cycle_function),
-        Operation::STRHImm { imm: _, n: _, t: _ } => CycleCount::Function(address_max_cycle_function),
+        Operation::STRHImm { imm: _, n: _, t: _ } => {
+            CycleCount::Function(address_max_cycle_function)
+        }
         Operation::STRHReg { m: _, n: _, t: _ } => CycleCount::Function(address_max_cycle_function),
         // /\/\/\/\ Can be one depending on core implementation and address /\/\/\/\
         Operation::SUBImm { imm: _, n: _, d: _ } => CycleCount::Value(1),
