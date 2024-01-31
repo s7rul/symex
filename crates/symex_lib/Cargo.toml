@@ -5,3 +5,4 @@ edition = "2021"
 
 [dependencies]
 valid_derive = { path = "../valid_derive", version = "*" }
+any_derive = { path = "../any_derive", version = "*" }

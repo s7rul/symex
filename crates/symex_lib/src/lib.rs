@@ -5,6 +5,7 @@ use core::mem::size_of;
 
 pub use any::{any, Any};
 pub use valid_derive::Validate;
+pub use any_derive::Any;
 
 /// Assume the condition.
 ///

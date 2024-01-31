@@ -50,6 +50,7 @@ impl VM {
     }
 
     pub fn run(&mut self) -> Result<Option<(PathResult, GAState)>> {
+        println!("Paths in queue: {}", self.paths.waiting_paths());
         while let Some(path) = self.paths.get_path() {
             // try stuff
             let mut executor = GAExecutor::from_state(path.state, self, self.project);

@@ -58,13 +58,13 @@ lto = 'off'
 
 # cargo build/run --release
 [profile.release]
-codegen-units = 1
+# codegen-units = 1
 debug = 2
-debug-assertions = true
-incremental = false
-opt-level = 0
-overflow-checks = false
-lto = 'off'
+# debug-assertions = true
+# incremental = false
+# opt-level = 0
+# overflow-checks = false
+# lto = 'off'
 
 # # cargo test
 # [profile.test]

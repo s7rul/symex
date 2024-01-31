@@ -68,21 +68,18 @@ impl<'vm> GAExecutor<'vm> {
                 HookOrInstruction::Instruction(v) => v,
                 HookOrInstruction::PcHook(hook) => match hook {
                     crate::general_assembly::project::PCHook::Continue => {
-                        todo!()
+                        debug!("Continuing");
+                        let lr = self.state.get_register("LR".to_owned()).unwrap();
+                        self.state.set_register("PC".to_owned(), lr)?;
+                        continue;
                     }
                     crate::general_assembly::project::PCHook::EndSuccess => {
                         debug!("Symbolic execution ended succesfully");
-                        for (reg_name, reg_value) in &self.state.registers {
-                            debug!("{}: {:?}", reg_name, reg_value.clone().simplify())
-                        }
                         self.state.increment_cycle_count();
                         return Ok(PathResult::Success(None));
                     }
                     crate::general_assembly::project::PCHook::EndFaliure(reason) => {
                         debug!("Symbolic execution ended unsuccesfully");
-                        for (reg_name, reg_value) in &self.state.registers {
-                            debug!("{}: {:?}", reg_name, reg_value.clone().simplify())
-                        }
                         self.state.increment_cycle_count();
                         return Ok(PathResult::Faliure(reason));
                     }

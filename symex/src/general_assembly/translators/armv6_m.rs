@@ -11,7 +11,7 @@ use crate::{
     elf_util::{ExpressionType, Variable},
     general_assembly::{
         instruction::{Condition, CycleCount, Operand},
-        project::{PCHook, RegisterReadHook, RegisterWriteHook},
+        project::{MemoryHookAddress, MemoryReadHook, PCHook, RegisterReadHook, RegisterWriteHook},
         state::GAState,
         translator::Translatable,
         DataWord, RunConfig,
@@ -1712,6 +1712,14 @@ impl Translatable for Instruction {
 
         cfg.register_read_hooks.push(("PC+".to_owned(), read_pc));
         cfg.register_write_hooks.push(("PC+".to_owned(), write_pc));
+
+        // reset allways done
+        let read_reset_done: MemoryReadHook = |state, addr| {
+            let value = state.ctx.from_u64(0xffff_ffff, 32);
+            Ok(value)
+        };
+        cfg.memory_read_hooks.push((MemoryHookAddress::Single(0x4000c008), read_reset_done));
+
     }
 }
 
