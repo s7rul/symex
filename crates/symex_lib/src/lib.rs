@@ -4,8 +4,8 @@ mod any;
 use core::mem::size_of;
 
 pub use any::{any, Any};
-pub use valid_derive::Validate;
 pub use any_derive::Any;
+pub use valid_derive::Validate;
 
 /// Assume the condition.
 ///

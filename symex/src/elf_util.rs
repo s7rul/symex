@@ -314,7 +314,7 @@ impl<'a> fmt::Display for TypedVariable<'a> {
                     Ok(v) => v,
                     Err(_) => {
                         return write!(f, "unable to display: ({bits}-{bits_str})");
-                    },
+                    }
                 };
 
                 const BITS_IN_BYTES: usize = 8;

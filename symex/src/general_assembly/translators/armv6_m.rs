@@ -24,18 +24,50 @@ type ArmCodition = armv6_m_instruction_parser::conditions::Condition;
 
 fn cycle_count_m0plus_core(operation: &Operation) -> CycleCount {
     // SIO based on the rp2040 make this configurable later
-    let address_max_cycle_function: fn(state: &GAState) -> usize = |state| {
+    let address_max_cycle_function_read: fn(state: &GAState) -> usize = |state| {
         let address = match state.registers.get("LastAddr").unwrap().get_constant() {
             Some(v) => v,
             None => return 2,
         };
 
-        if address <= 0xdfffffff && address >= 0xd0000000 {
+        if address <= 0xdfff_ffff && address >= 0xd000_0000 {
+            // PIO
             1
+        } else if (address <= 0x5fff_ffff && address >= 0x5000_0000)
+            || (address <= 0x2004_2000 && address >= 0x2000_0000)
+        {
+            // AHB lite
+            2
+        } else if address <= 0x4fff_ffff && address >= 0x4000_0000 {
+            // APB peripheral
+            3
         } else {
             2
         }
     };
+
+    let address_max_cycle_function_write: fn(state: &GAState) -> usize = |state| {
+        let address = match state.registers.get("LastAddr").unwrap().get_constant() {
+            Some(v) => v,
+            None => return 2,
+        };
+
+        if address <= 0xdfff_ffff && address >= 0xd000_0000 {
+            // PIO
+            1
+        } else if (address <= 0x5fff_ffff && address >= 0x5000_0000)
+            || (address <= 0x2004_2000 && address >= 0x2000_0000)
+        {
+            // AHB lite
+            2
+        } else if address <= 0x4fff_ffff && address >= 0x4000_0000 {
+            // APB peripheral
+            4
+        } else {
+            2
+        }
+    };
+
     match operation {
         Operation::ADCReg { m: _, n: _, d: _ } => CycleCount::Value(1),
         Operation::ADDImm { imm: _, n: _, d: _ } => CycleCount::Value(1),
@@ -83,22 +115,22 @@ fn cycle_count_m0plus_core(operation: &Operation) -> CycleCount {
 
         // \/\/\/\/ Can be one depending on core implementation and address \/\/\/\/
         Operation::LDRImm { imm: _, n: _, t: _ } => {
-            CycleCount::Function(address_max_cycle_function)
+            CycleCount::Function(address_max_cycle_function_read)
         }
-        Operation::LDRLiteral { t: _, imm: _ } => CycleCount::Function(address_max_cycle_function),
-        Operation::LDRReg { m: _, n: _, t: _ } => CycleCount::Function(address_max_cycle_function),
+        Operation::LDRLiteral { t: _, imm: _ } => CycleCount::Function(address_max_cycle_function_read),
+        Operation::LDRReg { m: _, n: _, t: _ } => CycleCount::Function(address_max_cycle_function_read),
         Operation::LDRBImm { imm: _, n: _, t: _ } => {
-            CycleCount::Function(address_max_cycle_function)
+            CycleCount::Function(address_max_cycle_function_read)
         }
-        Operation::LDRBReg { m: _, n: _, t: _ } => CycleCount::Function(address_max_cycle_function),
+        Operation::LDRBReg { m: _, n: _, t: _ } => CycleCount::Function(address_max_cycle_function_read),
         Operation::LDRHImm { imm: _, n: _, t: _ } => {
-            CycleCount::Function(address_max_cycle_function)
+            CycleCount::Function(address_max_cycle_function_read)
         }
-        Operation::LDRHReg { m: _, n: _, t: _ } => CycleCount::Function(address_max_cycle_function),
+        Operation::LDRHReg { m: _, n: _, t: _ } => CycleCount::Function(address_max_cycle_function_read),
         Operation::LDRSBReg { m: _, n: _, t: _ } => {
-            CycleCount::Function(address_max_cycle_function)
+            CycleCount::Function(address_max_cycle_function_read)
         }
-        Operation::LDRSH { m: _, n: _, t: _ } => CycleCount::Function(address_max_cycle_function),
+        Operation::LDRSH { m: _, n: _, t: _ } => CycleCount::Function(address_max_cycle_function_read),
         // /\/\/\/\ Can be one depending on core implementation and address /\/\/\/\
         Operation::LSLImm { imm: _, m: _, d: _ } => CycleCount::Value(1),
         Operation::LSLReg { m: _, dn: _ } => CycleCount::Value(1),
@@ -141,17 +173,17 @@ fn cycle_count_m0plus_core(operation: &Operation) -> CycleCount {
 
         // \/\/\/\/ Can be one depending on core implementation and address \/\/\/\/
         Operation::STRImm { imm: _, n: _, t: _ } => {
-            CycleCount::Function(address_max_cycle_function)
+            CycleCount::Function(address_max_cycle_function_write)
         }
-        Operation::STRReg { m: _, n: _, t: _ } => CycleCount::Function(address_max_cycle_function),
+        Operation::STRReg { m: _, n: _, t: _ } => CycleCount::Function(address_max_cycle_function_write),
         Operation::STRBImm { imm: _, n: _, t: _ } => {
-            CycleCount::Function(address_max_cycle_function)
+            CycleCount::Function(address_max_cycle_function_write)
         }
-        Operation::STRBReg { m: _, n: _, t: _ } => CycleCount::Function(address_max_cycle_function),
+        Operation::STRBReg { m: _, n: _, t: _ } => CycleCount::Function(address_max_cycle_function_write),
         Operation::STRHImm { imm: _, n: _, t: _ } => {
-            CycleCount::Function(address_max_cycle_function)
+            CycleCount::Function(address_max_cycle_function_write)
         }
-        Operation::STRHReg { m: _, n: _, t: _ } => CycleCount::Function(address_max_cycle_function),
+        Operation::STRHReg { m: _, n: _, t: _ } => CycleCount::Function(address_max_cycle_function_write),
         // /\/\/\/\ Can be one depending on core implementation and address /\/\/\/\
         Operation::SUBImm { imm: _, n: _, d: _ } => CycleCount::Value(1),
         Operation::SUBReg { m: _, n: _, d: _ } => CycleCount::Value(1),
@@ -1718,8 +1750,8 @@ impl Translatable for Instruction {
             let value = state.ctx.from_u64(0xffff_ffff, 32);
             Ok(value)
         };
-        cfg.memory_read_hooks.push((MemoryHookAddress::Single(0x4000c008), read_reset_done));
-
+        cfg.memory_read_hooks
+            .push((MemoryHookAddress::Single(0x4000c008), read_reset_done));
     }
 }
 
