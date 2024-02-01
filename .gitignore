@@ -3,6 +3,8 @@
 Cargo.lock
 .vscode
 
+armv6-m-examples/target
+
 # Generated IR files
 *.bc
 *.ll
