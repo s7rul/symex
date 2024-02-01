@@ -13,7 +13,7 @@ use crate::{
 use super::{
     instruction::{Instruction, Operand, Operation},
     project::Project,
-    state::GAState,
+    state::{ContinueInsideInstruction, GAState},
     vm::VM,
     DataWord, Result,
 };
@@ -22,6 +22,8 @@ pub struct GAExecutor<'vm> {
     pub vm: &'vm mut VM,
     pub state: GAState,
     pub project: &'static Project,
+    //current_instruction: Option<Instruction>,
+    current_operation_index: usize,
 }
 
 pub enum PathResult {
@@ -40,30 +42,44 @@ struct AddWithCarryResult {
 impl<'vm> GAExecutor<'vm> {
     /// Construct a executor from a state.
     pub fn from_state(state: GAState, vm: &'vm mut VM, project: &'static Project) -> Self {
-        Self { vm, state, project }
+        Self {
+            vm,
+            state,
+            project,
+            //current_instruction: None,
+            current_operation_index: 0,
+        }
     }
 
     pub fn resume_execution(&mut self) -> Result<PathResult> {
+        let possible_continue = self.state.continue_in_instruction.to_owned();
+
+        match possible_continue {
+            Some(i) => {
+                self.continue_executing_instruction(&i)?;
+                self.state.continue_in_instruction = None;
+                self.state.set_last_instruction(i.instruction);
+            }
+            None => (),
+        }
+
         loop {
             let instruction = match self.state.get_next_instruction()? {
                 HookOrInstruction::Instruction(v) => v,
                 HookOrInstruction::PcHook(hook) => match hook {
                     crate::general_assembly::project::PCHook::Continue => {
-                        todo!()
+                        debug!("Continuing");
+                        let lr = self.state.get_register("LR".to_owned()).unwrap();
+                        self.state.set_register("PC".to_owned(), lr)?;
+                        continue;
                     }
                     crate::general_assembly::project::PCHook::EndSuccess => {
                         debug!("Symbolic execution ended succesfully");
-                        for (reg_name, reg_value) in &self.state.registers {
-                            debug!("{}: {:?}", reg_name, reg_value.clone().simplify())
-                        }
                         self.state.increment_cycle_count();
                         return Ok(PathResult::Success(None));
                     }
                     crate::general_assembly::project::PCHook::EndFaliure(reason) => {
                         debug!("Symbolic execution ended unsuccesfully");
-                        for (reg_name, reg_value) in &self.state.registers {
-                            debug!("{}: {:?}", reg_name, reg_value.clone().simplify())
-                        }
                         self.state.increment_cycle_count();
                         return Ok(PathResult::Faliure(reason));
                     }
@@ -112,72 +128,58 @@ impl<'vm> GAExecutor<'vm> {
     }
 
     /// Retrieves a smt expression representing value stored at `address` in memory.
-    fn get_memory(&mut self, address: &DExpr, bits: u32) -> Result<DExpr> {
+    fn get_memory(&mut self, address: u64, bits: u32) -> Result<DExpr> {
         trace!("Getting memmory addr: {:?}", address);
-        match address.get_constant() {
-            Some(const_addr) => {
-                // check for hook and return early
-                if let Some(hook) = self.project.get_memory_read_hook(const_addr) {
-                    return hook(&mut self.state, const_addr);
-                }
+        // check for hook and return early
+        if let Some(hook) = self.project.get_memory_read_hook(address) {
+            return hook(&mut self.state, address);
+        }
 
-                if self.project.address_in_range(const_addr) {
-                    if bits == self.project.get_word_size() {
-                        // full word
-                        Ok(self.get_dexpr_from_dataword(self.project.get_word(const_addr)?))
-                    } else if bits == self.project.get_word_size() / 2 {
-                        // half word
-                        Ok(self.get_dexpr_from_dataword(
-                            self.project.get_half_word(const_addr)?.into(),
-                        ))
-                    } else if bits == 8 {
-                        // byte
-                        Ok(self
-                            .state
-                            .ctx
-                            .from_u64(self.project.get_byte(const_addr)? as u64, 8))
-                    } else {
-                        todo!()
-                    }
-                } else {
-                    let data = self.state.memory.read(address, bits)?;
-                    Ok(data)
-                }
+        if self.project.address_in_range(address) {
+            if bits == self.project.get_word_size() {
+                // full word
+                Ok(self.get_dexpr_from_dataword(self.project.get_word(address)?))
+            } else if bits == self.project.get_word_size() / 2 {
+                // half word
+                Ok(self.get_dexpr_from_dataword(self.project.get_half_word(address)?.into()))
+            } else if bits == 8 {
+                // byte
+                Ok(self
+                    .state
+                    .ctx
+                    .from_u64(self.project.get_byte(address)? as u64, 8))
+            } else {
+                todo!()
             }
-            None => {
-                //todo!("handle symbolic address better");
-                let data = self.state.memory.read(address, bits)?;
-                Ok(data)
-            }
+        } else {
+            let symbolic_address = self
+                .state
+                .ctx
+                .from_u64(address, self.project.get_ptr_size());
+            let data = self.state.memory.read(&symbolic_address, bits)?;
+            Ok(data)
         }
     }
 
     /// Sets the memory at `address` to `data`.
-    fn set_memory(&mut self, data: DExpr, address: &DExpr, bits: u32) -> Result<()> {
+    fn set_memory(&mut self, data: DExpr, address: u64, bits: u32) -> Result<()> {
         trace!("Setting memmory addr: {:?}", address);
-        match address.get_constant() {
-            Some(const_addr) => {
-                // check for hook and return early
-                if let Some(hook) = self.project.get_memory_write_hook(const_addr) {
-                    return hook(&mut self.state, const_addr, data, bits);
-                }
+        // check for hook and return early
+        if let Some(hook) = self.project.get_memory_write_hook(address) {
+            return hook(&mut self.state, address, data, bits);
+        }
 
-                if self.project.address_in_range(const_addr) {
-                    Err(super::GAError::WritingToStaticMemoryProhibited)
-                } else {
-                    self.state
-                        .memory
-                        .write(address, data.resize_unsigned(bits))?;
-                    Ok(())
-                }
-            }
-            None => {
-                //todo!("handle symbolic address better");
-                self.state
-                    .memory
-                    .write(address, data.resize_unsigned(bits))?;
-                Ok(())
-            }
+        if self.project.address_in_range(address) {
+            Err(super::GAError::WritingToStaticMemoryProhibited)
+        } else {
+            let symbolic_address = self
+                .state
+                .ctx
+                .from_u64(address, self.project.get_ptr_size());
+            self.state
+                .memory
+                .write(&symbolic_address, data.resize_unsigned(bits))?;
+            Ok(())
         }
     }
 
@@ -191,7 +193,8 @@ impl<'vm> GAExecutor<'vm> {
             Operand::Register(name) => Ok(self.state.get_register(name.to_owned())?),
             Operand::Immidiate(v) => Ok(self.get_dexpr_from_dataword(v.to_owned())),
             Operand::Address(address, width) => {
-                let address = &self.get_dexpr_from_dataword(*address);
+                let address = self.get_dexpr_from_dataword(*address);
+                let address = self.resolve_address(address, &local)?;
                 self.get_memory(address, *width)
             }
             Operand::AddressWithOffset {
@@ -203,7 +206,8 @@ impl<'vm> GAExecutor<'vm> {
             Operand::AddressInLocal(local_name, width) => {
                 let address =
                     self.get_operand_value(&Operand::Local(local_name.to_owned()), local)?;
-                self.get_memory(&address, *width)
+                let address = self.resolve_address(address, &local)?;
+                self.get_memory(address, *width)
             }
         }
     }
@@ -224,11 +228,13 @@ impl<'vm> GAExecutor<'vm> {
             Operand::AddressInLocal(local_name, width) => {
                 let address =
                     self.get_operand_value(&Operand::Local(local_name.to_owned()), local)?;
-                self.set_memory(value, &address, *width)?;
+                let address = self.resolve_address(address, &local)?;
+                self.set_memory(value, address, *width)?;
             }
             Operand::Address(address, width) => {
                 let address = self.get_dexpr_from_dataword(*address);
-                self.set_memory(value, &address, *width)?;
+                let address = self.resolve_address(address, &local)?;
+                self.set_memory(value, address, *width)?;
             }
             Operand::AddressWithOffset {
                 address: _,
@@ -238,6 +244,76 @@ impl<'vm> GAExecutor<'vm> {
             Operand::Local(k) => {
                 local.insert(k.to_owned(), value);
             }
+        }
+        Ok(())
+    }
+
+    fn resolve_address(&mut self, address: DExpr, local: &HashMap<String, DExpr>) -> Result<u64> {
+        match &address.get_constant() {
+            Some(addr) => Ok(*addr),
+            None => {
+                // find all possible addresses
+                let addresses = self.state.constraints.get_values(&address, 255)?;
+
+                let addresses = match addresses {
+                    crate::smt::Solutions::Exactly(a) => Ok(a),
+                    crate::smt::Solutions::AtLeast(_) => Err(SolverError::TooManySolutions),
+                }?;
+
+                if addresses.len() == 1 {
+                    return Ok(addresses[0].get_constant().unwrap());
+                } else if addresses.len() == 0 {
+                    return Err(SolverError::Unsat.into());
+                }
+
+                // create paths for all but the first address
+                for addr in &addresses[1..] {
+                    if self.current_operation_index
+                        < self
+                            .state
+                            .current_instruction
+                            .as_ref()
+                            .unwrap()
+                            .operations
+                            .len()
+                            - 1
+                    {
+                        self.state.continue_in_instruction = Some(ContinueInsideInstruction {
+                            instruction: self
+                                .state
+                                .current_instruction
+                                .as_ref()
+                                .unwrap()
+                                .to_owned(),
+                            index: self.current_operation_index,
+                            local: local.clone(),
+                        })
+                    }
+
+                    let constraint = address._eq(addr);
+                    self.fork(constraint)?;
+                }
+
+                // assert first address and return concrete
+                let concrete_address = &addresses[0];
+                self.state
+                    .constraints
+                    .assert(&address._eq(concrete_address));
+                Ok(concrete_address.get_constant().unwrap())
+            }
+        }
+    }
+
+    fn continue_executing_instruction(
+        &mut self,
+        inst_to_continue: &ContinueInsideInstruction,
+    ) -> Result<()> {
+        let mut local = inst_to_continue.local.to_owned();
+        self.state.current_instruction = Some(inst_to_continue.instruction.to_owned());
+        for i in inst_to_continue.index..inst_to_continue.instruction.operations.len() {
+            let operation = &inst_to_continue.instruction.operations[i];
+            self.current_operation_index = i;
+            self.executer_operation(operation, &mut local)?;
         }
         Ok(())
     }
@@ -266,9 +342,12 @@ impl<'vm> GAExecutor<'vm> {
         // so that forked path count this instruction
         self.state.increment_instruction_count();
 
+        self.state.current_instruction = Some(i.to_owned());
+
         // initiate local variable storage
         let mut local: HashMap<String, DExpr> = HashMap::new();
-        for operation in &i.operations {
+        for (n, operation) in i.operations.iter().enumerate() {
+            self.current_operation_index = n;
             self.executer_operation(operation, &mut local)?;
         }
 
@@ -408,6 +487,7 @@ impl<'vm> GAExecutor<'vm> {
                 destination,
                 condition,
             } => {
+                let dest_value = self.get_operand_value(destination, &local)?;
                 let c = self.state.get_expr(condition)?.simplify();
                 trace!("conditional expr: {:?}", c);
 
@@ -415,7 +495,7 @@ impl<'vm> GAExecutor<'vm> {
                 if let Some(constant_c) = c.get_constant_bool() {
                     if constant_c {
                         self.state.set_has_jumped();
-                        let destination = self.get_operand_value(destination, &local)?;
+                        let destination = dest_value;
                         self.state.set_register("PC".to_owned(), destination)?;
                     }
                     return Ok(());
@@ -431,14 +511,35 @@ impl<'vm> GAExecutor<'vm> {
 
                 let destination: DExpr = match (true_possible, false_possible) {
                     (true, true) => {
+                        if self.current_operation_index
+                            < (self
+                                .state
+                                .current_instruction
+                                .as_ref()
+                                .unwrap()
+                                .operations
+                                .len()
+                                - 1)
+                        {
+                            self.state.continue_in_instruction = Some(ContinueInsideInstruction {
+                                instruction: self
+                                    .state
+                                    .current_instruction
+                                    .as_ref()
+                                    .unwrap()
+                                    .to_owned(),
+                                index: self.current_operation_index + 1,
+                                local: local.to_owned(),
+                            });
+                        }
                         self.fork(c.not())?;
                         self.state.constraints.assert(&c);
                         self.state.set_has_jumped();
-                        Ok(self.get_operand_value(destination, &local)?)
+                        Ok(dest_value)
                     }
                     (true, false) => {
                         self.state.set_has_jumped();
-                        Ok(self.get_operand_value(destination, &local)?)
+                        Ok(dest_value)
                     }
                     (false, true) => Ok(self.state.get_register("PC".to_owned())?), // safe to asume PC exist
                     (false, false) => Err(SolverError::Unsat),
@@ -659,7 +760,7 @@ mod test {
     use crate::{
         general_assembly::{
             executor::{add_with_carry, GAExecutor},
-            instruction::{Operand, Operation},
+            instruction::{CycleCount, Instruction, Operand, Operation},
             project::Project,
             state::GAState,
             vm::VM,

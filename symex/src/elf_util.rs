@@ -310,7 +310,12 @@ impl<'a> fmt::Display for TypedVariable<'a> {
         match self {
             Integer(value, bits) => {
                 let bits_str = if *bits == 1 { "bit" } else { "bits" };
-                let value = u128::from_str_radix(value, 2).unwrap();
+                let value = match u128::from_str_radix(value, 2) {
+                    Ok(v) => v,
+                    Err(_) => {
+                        return write!(f, "unable to display: ({bits}-{bits_str})");
+                    },
+                };
 
                 const BITS_IN_BYTES: usize = 8;
                 const BITS_PER_HEX_CHAR: usize = 4;

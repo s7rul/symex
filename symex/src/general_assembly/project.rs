@@ -3,7 +3,7 @@ use std::{collections::HashMap, fmt::Debug, fs};
 use armv6_m_instruction_parser::parse;
 use gimli::{DebugAbbrev, DebugInfo, DebugStr};
 use object::{Architecture, File, Object, ObjectSection, ObjectSymbol};
-use tracing::debug;
+use tracing::{debug, trace};
 
 use crate::{general_assembly::translator::Translatable, memory::MemoryError, smt::DExpr};
 
@@ -231,7 +231,6 @@ impl Project {
         let debug_str = obj_file.section_by_name(".debug_str").unwrap();
         let debug_str = DebugStr::new(debug_str.data().unwrap(), gimli_endian);
 
-
         match architecture {
             Architecture::Arm => {
                 armv6_m_instruction_parser::instructons::Instruction::add_hooks(cfg)
@@ -347,7 +346,7 @@ impl Project {
 
     /// Get the instruction att a address
     pub fn get_instruction(&self, address: u64) -> Result<Instruction> {
-        debug!("Reading instruction from address: {:#010X}", address);
+        trace!("Reading instruction from address: {:#010X}", address);
         match self.get_raw_word(address)? {
             RawDataWord::Word64(d) => self.instruction_from_array_ptr(&d),
             RawDataWord::Word32(d) => self.instruction_from_array_ptr(&d),
@@ -361,7 +360,7 @@ impl Project {
             object::Architecture::Arm => {
                 // probobly right add more cheks later or custom enum etc.
                 let arm_instruction = parse(data).unwrap();
-                debug!("instruction read: {:?}", arm_instruction);
+                trace!("instruction read: {:?}", arm_instruction);
                 Ok(arm_instruction.translate())
             }
             _ => todo!(),

@@ -51,7 +51,7 @@ pub fn validate_macro_derive(input: TokenStream) -> TokenStream {
             fn is_valid(&self) -> bool {
                 #(#exp)*
                 {
-                    symex_lib::suppress_path()
+                     symex_lib::ignore_path()
                 }
             }
         }

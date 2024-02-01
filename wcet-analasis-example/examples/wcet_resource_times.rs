@@ -74,7 +74,15 @@ fn main() {
         |state, addr, value, bits| {
             // save the current cycle count to the laps vector.
             let val = value.get_constant().unwrap().to_string();
-            state.cycle_laps.push((state.cycle_count, val));
+            let current_instruction_cycle_count =
+                match state.current_instruction.as_ref().unwrap().max_cycle {
+                    symex::general_assembly::instruction::CycleCount::Value(v) => v,
+                    symex::general_assembly::instruction::CycleCount::Function(f) => f(state),
+                };
+
+            // add the current instruction to the cycle count to compensate for cycles added after instruction completed
+            let cycle_count = state.cycle_count + current_instruction_cycle_count;
+            state.cycle_laps.push((cycle_count, val));
             Ok(())
         };
 
@@ -100,7 +108,12 @@ fn main() {
     for result in results {
         println!("cycle laps: {:?}", result.cycle_laps);
         max = max.max(result.max_cycles);
-        let trace = make_trace(0, max, &result.cycle_laps, function_name.to_owned());
+        let trace = make_trace(
+            0,
+            result.max_cycles,
+            &result.cycle_laps,
+            function_name.to_owned(),
+        );
         println!("trace: {:?}", trace);
     }
 

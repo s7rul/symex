@@ -5,6 +5,7 @@ use core::mem::size_of;
 
 pub use any::{any, Any};
 pub use valid_derive::Validate;
+pub use any_derive::Any;
 
 /// Assume the condition.
 ///
@@ -157,6 +158,7 @@ pub fn ignore_path() -> ! {
 ///
 /// It is hard to create a "can be anything" value in pure rust, this function tries to trick the
 /// optimizer into not optimizing `value`.
-fn black_box<T>(value: &mut T) {
+#[doc(hidden)]
+pub fn black_box<T>(value: &mut T) {
     *value = unsafe { core::ptr::read_volatile(value as *mut T) }
 }

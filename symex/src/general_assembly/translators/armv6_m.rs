@@ -11,7 +11,7 @@ use crate::{
     elf_util::{ExpressionType, Variable},
     general_assembly::{
         instruction::{Condition, CycleCount, Operand},
-        project::{PCHook, RegisterReadHook, RegisterWriteHook},
+        project::{MemoryHookAddress, MemoryReadHook, PCHook, RegisterReadHook, RegisterWriteHook},
         state::GAState,
         translator::Translatable,
         DataWord, RunConfig,
@@ -23,6 +23,19 @@ type GAOperation = crate::general_assembly::instruction::Operation;
 type ArmCodition = armv6_m_instruction_parser::conditions::Condition;
 
 fn cycle_count_m0plus_core(operation: &Operation) -> CycleCount {
+    // SIO based on the rp2040 make this configurable later
+    let address_max_cycle_function: fn(state: &GAState) -> usize = |state| {
+        let address = match state.registers.get("LastAddr").unwrap().get_constant() {
+            Some(v) => v,
+            None => return 2,
+        };
+
+        if address <= 0xdfffffff && address >= 0xd0000000 {
+            1
+        } else {
+            2
+        }
+    };
     match operation {
         Operation::ADCReg { m: _, n: _, d: _ } => CycleCount::Value(1),
         Operation::ADDImm { imm: _, n: _, d: _ } => CycleCount::Value(1),
@@ -69,15 +82,23 @@ fn cycle_count_m0plus_core(operation: &Operation) -> CycleCount {
         }
 
         // \/\/\/\/ Can be one depending on core implementation and address \/\/\/\/
-        Operation::LDRImm { imm: _, n: _, t: _ } => CycleCount::Value(2),
-        Operation::LDRLiteral { t: _, imm: _ } => CycleCount::Value(2),
-        Operation::LDRReg { m: _, n: _, t: _ } => CycleCount::Value(2),
-        Operation::LDRBImm { imm: _, n: _, t: _ } => CycleCount::Value(2),
-        Operation::LDRBReg { m: _, n: _, t: _ } => CycleCount::Value(2),
-        Operation::LDRHImm { imm: _, n: _, t: _ } => CycleCount::Value(2),
-        Operation::LDRHReg { m: _, n: _, t: _ } => CycleCount::Value(2),
-        Operation::LDRSBReg { m: _, n: _, t: _ } => CycleCount::Value(2),
-        Operation::LDRSH { m: _, n: _, t: _ } => CycleCount::Value(2),
+        Operation::LDRImm { imm: _, n: _, t: _ } => {
+            CycleCount::Function(address_max_cycle_function)
+        }
+        Operation::LDRLiteral { t: _, imm: _ } => CycleCount::Function(address_max_cycle_function),
+        Operation::LDRReg { m: _, n: _, t: _ } => CycleCount::Function(address_max_cycle_function),
+        Operation::LDRBImm { imm: _, n: _, t: _ } => {
+            CycleCount::Function(address_max_cycle_function)
+        }
+        Operation::LDRBReg { m: _, n: _, t: _ } => CycleCount::Function(address_max_cycle_function),
+        Operation::LDRHImm { imm: _, n: _, t: _ } => {
+            CycleCount::Function(address_max_cycle_function)
+        }
+        Operation::LDRHReg { m: _, n: _, t: _ } => CycleCount::Function(address_max_cycle_function),
+        Operation::LDRSBReg { m: _, n: _, t: _ } => {
+            CycleCount::Function(address_max_cycle_function)
+        }
+        Operation::LDRSH { m: _, n: _, t: _ } => CycleCount::Function(address_max_cycle_function),
         // /\/\/\/\ Can be one depending on core implementation and address /\/\/\/\
         Operation::LSLImm { imm: _, m: _, d: _ } => CycleCount::Value(1),
         Operation::LSLReg { m: _, dn: _ } => CycleCount::Value(1),
@@ -119,12 +140,18 @@ fn cycle_count_m0plus_core(operation: &Operation) -> CycleCount {
         Operation::STM { n: _, reg_list } => CycleCount::Value(1 + reg_list.len()),
 
         // \/\/\/\/ Can be one depending on core implementation and address \/\/\/\/
-        Operation::STRImm { imm: _, n: _, t: _ } => CycleCount::Value(2),
-        Operation::STRReg { m: _, n: _, t: _ } => CycleCount::Value(2),
-        Operation::STRBImm { imm: _, n: _, t: _ } => CycleCount::Value(2),
-        Operation::STRBReg { m: _, n: _, t: _ } => CycleCount::Value(2),
-        Operation::STRHImm { imm: _, n: _, t: _ } => CycleCount::Value(2),
-        Operation::STRHReg { m: _, n: _, t: _ } => CycleCount::Value(2),
+        Operation::STRImm { imm: _, n: _, t: _ } => {
+            CycleCount::Function(address_max_cycle_function)
+        }
+        Operation::STRReg { m: _, n: _, t: _ } => CycleCount::Function(address_max_cycle_function),
+        Operation::STRBImm { imm: _, n: _, t: _ } => {
+            CycleCount::Function(address_max_cycle_function)
+        }
+        Operation::STRBReg { m: _, n: _, t: _ } => CycleCount::Function(address_max_cycle_function),
+        Operation::STRHImm { imm: _, n: _, t: _ } => {
+            CycleCount::Function(address_max_cycle_function)
+        }
+        Operation::STRHReg { m: _, n: _, t: _ } => CycleCount::Function(address_max_cycle_function),
         // /\/\/\/\ Can be one depending on core implementation and address /\/\/\/\
         Operation::SUBImm { imm: _, n: _, d: _ } => CycleCount::Value(1),
         Operation::SUBReg { m: _, n: _, d: _ } => CycleCount::Value(1),
@@ -666,6 +693,10 @@ impl Translatable for Instruction {
                     operand2: Operand::Immidiate(DataWord::Word32(*imm)),
                 },
                 GAOperation::Move {
+                    destination: Operand::Register("LastAddr".to_owned()),
+                    source: Operand::Local("addr".to_owned()),
+                },
+                GAOperation::Move {
                     destination: arm_register_to_ga_operand(t),
                     source: Operand::AddressInLocal("addr".to_owned(), 32),
                 },
@@ -673,7 +704,7 @@ impl Translatable for Instruction {
             Operation::LDRLiteral { t, imm } => vec![
                 GAOperation::Add {
                     destination: Operand::Local("addr".to_owned()),
-                    operand1: arm_register_to_ga_operand(&Register::PC),
+                    operand1: Operand::Register("PC".to_owned()),
                     operand2: Operand::Immidiate(DataWord::Word32(2)),
                 },
                 GAOperation::And {
@@ -687,6 +718,10 @@ impl Translatable for Instruction {
                     operand2: Operand::Immidiate(DataWord::Word32(*imm)),
                 },
                 GAOperation::Move {
+                    destination: Operand::Register("LastAddr".to_owned()),
+                    source: Operand::Local("addr".to_owned()),
+                },
+                GAOperation::Move {
                     destination: arm_register_to_ga_operand(t),
                     source: Operand::AddressInLocal("addr".to_owned(), 32),
                 },
@@ -698,6 +733,10 @@ impl Translatable for Instruction {
                     operand2: arm_register_to_ga_operand(m),
                 },
                 GAOperation::Move {
+                    destination: Operand::Register("LastAddr".to_owned()),
+                    source: Operand::Local("addr".to_owned()),
+                },
+                GAOperation::Move {
                     destination: arm_register_to_ga_operand(t),
                     source: Operand::AddressInLocal("addr".to_owned(), 32),
                 },
@@ -707,6 +746,10 @@ impl Translatable for Instruction {
                     destination: Operand::Local("addr".to_owned()),
                     operand1: arm_register_to_ga_operand(n),
                     operand2: Operand::Immidiate(DataWord::Word32(*imm)),
+                },
+                GAOperation::Move {
+                    destination: Operand::Register("LastAddr".to_owned()),
+                    source: Operand::Local("addr".to_owned()),
                 },
                 GAOperation::Move {
                     destination: arm_register_to_ga_operand(t),
@@ -725,6 +768,10 @@ impl Translatable for Instruction {
                     operand2: arm_register_to_ga_operand(m),
                 },
                 GAOperation::Move {
+                    destination: Operand::Register("LastAddr".to_owned()),
+                    source: Operand::Local("addr".to_owned()),
+                },
+                GAOperation::Move {
                     destination: arm_register_to_ga_operand(t),
                     source: Operand::AddressInLocal("addr".to_owned(), 8),
                 },
@@ -739,6 +786,10 @@ impl Translatable for Instruction {
                     destination: Operand::Local("addr".to_owned()),
                     operand1: arm_register_to_ga_operand(n),
                     operand2: Operand::Immidiate(DataWord::Word32(*imm)),
+                },
+                GAOperation::Move {
+                    destination: Operand::Register("LastAddr".to_owned()),
+                    source: Operand::Local("addr".to_owned()),
                 },
                 GAOperation::Move {
                     destination: arm_register_to_ga_operand(t),
@@ -757,6 +808,10 @@ impl Translatable for Instruction {
                     operand2: arm_register_to_ga_operand(m),
                 },
                 GAOperation::Move {
+                    destination: Operand::Register("LastAddr".to_owned()),
+                    source: Operand::Local("addr".to_owned()),
+                },
+                GAOperation::Move {
                     destination: arm_register_to_ga_operand(t),
                     source: Operand::AddressInLocal("addr".to_owned(), 16),
                 },
@@ -773,6 +828,10 @@ impl Translatable for Instruction {
                     operand2: arm_register_to_ga_operand(m),
                 },
                 GAOperation::Move {
+                    destination: Operand::Register("LastAddr".to_owned()),
+                    source: Operand::Local("addr".to_owned()),
+                },
+                GAOperation::Move {
                     destination: arm_register_to_ga_operand(t),
                     source: Operand::AddressInLocal("addr".to_owned(), 8),
                 },
@@ -787,6 +846,10 @@ impl Translatable for Instruction {
                     destination: Operand::Local("addr".to_owned()),
                     operand1: arm_register_to_ga_operand(n),
                     operand2: arm_register_to_ga_operand(m),
+                },
+                GAOperation::Move {
+                    destination: Operand::Register("LastAddr".to_owned()),
+                    source: Operand::Local("addr".to_owned()),
                 },
                 GAOperation::Move {
                     destination: arm_register_to_ga_operand(t),
@@ -1341,6 +1404,10 @@ impl Translatable for Instruction {
                         operand2: imm,
                     },
                     GAOperation::Move {
+                        destination: Operand::Register("LastAddr".to_owned()),
+                        source: Operand::Local("addr".to_owned()),
+                    },
+                    GAOperation::Move {
                         destination: to_addr,
                         source: t,
                     },
@@ -1358,6 +1425,10 @@ impl Translatable for Instruction {
                         destination: addr.clone(),
                         operand1: n,
                         operand2: m,
+                    },
+                    GAOperation::Move {
+                        destination: Operand::Register("LastAddr".to_owned()),
+                        source: Operand::Local("addr".to_owned()),
                     },
                     GAOperation::Move {
                         destination: to_addr,
@@ -1379,6 +1450,10 @@ impl Translatable for Instruction {
                         operand2: imm,
                     },
                     GAOperation::Move {
+                        destination: Operand::Register("LastAddr".to_owned()),
+                        source: Operand::Local("addr".to_owned()),
+                    },
+                    GAOperation::Move {
                         destination: to_addr,
                         source: t,
                     },
@@ -1396,6 +1471,10 @@ impl Translatable for Instruction {
                         destination: addr.clone(),
                         operand1: n,
                         operand2: m,
+                    },
+                    GAOperation::Move {
+                        destination: Operand::Register("LastAddr".to_owned()),
+                        source: Operand::Local("addr".to_owned()),
                     },
                     GAOperation::Move {
                         destination: to_addr,
@@ -1417,6 +1496,10 @@ impl Translatable for Instruction {
                         operand2: imm,
                     },
                     GAOperation::Move {
+                        destination: Operand::Register("LastAddr".to_owned()),
+                        source: Operand::Local("addr".to_owned()),
+                    },
+                    GAOperation::Move {
                         destination: to_addr,
                         source: t,
                     },
@@ -1434,6 +1517,10 @@ impl Translatable for Instruction {
                         destination: addr.clone(),
                         operand1: n,
                         operand2: m,
+                    },
+                    GAOperation::Move {
+                        destination: Operand::Register("LastAddr".to_owned()),
+                        source: Operand::Local("addr".to_owned()),
                     },
                     GAOperation::Move {
                         destination: to_addr,
@@ -1590,11 +1677,7 @@ impl Translatable for Instruction {
     fn add_hooks(cfg: &mut RunConfig) {
         let symbolic_sized = |state: &mut GAState| {
             let value_ptr = state.get_register("R0".to_owned())?;
-            let size = state
-                .get_register("R1".to_owned())?
-                .get_constant()
-                .unwrap()
-                * 8;
+            let size = state.get_register("R1".to_owned())?.get_constant().unwrap() * 8;
             trace!(
                 "trying to create symbolic: addr: {:?}, size: {}",
                 value_ptr,
@@ -1620,19 +1703,23 @@ impl Translatable for Instruction {
         ));
 
         let read_pc: RegisterReadHook = |state| {
-            trace!("Pc read hook");
             let two = state.ctx.from_u64(1, 32);
             let pc = state.get_register("PC".to_owned()).unwrap();
             Ok(pc.add(&two))
         };
 
-        let write_pc: RegisterWriteHook = |state, value | {
-            trace!("Pc write hook");
-            state.set_register("PC".to_owned(), value)
-        };
+        let write_pc: RegisterWriteHook = |state, value| state.set_register("PC".to_owned(), value);
 
         cfg.register_read_hooks.push(("PC+".to_owned(), read_pc));
         cfg.register_write_hooks.push(("PC+".to_owned(), write_pc));
+
+        // reset allways done
+        let read_reset_done: MemoryReadHook = |state, addr| {
+            let value = state.ctx.from_u64(0xffff_ffff, 32);
+            Ok(value)
+        };
+        cfg.memory_read_hooks.push((MemoryHookAddress::Single(0x4000c008), read_reset_done));
+
     }
 }
 

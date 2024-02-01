@@ -5,7 +5,7 @@ use std::collections::HashMap;
 use tracing::{debug, trace};
 
 use crate::{
-    elf_util::{Variable, ExpressionType},
+    elf_util::{ExpressionType, Variable},
     general_assembly::{
         project::{PCHook, ProjectError},
         GAError, Result,
@@ -25,6 +25,13 @@ pub enum HookOrInstruction {
 }
 
 #[derive(Clone, Debug)]
+pub struct ContinueInsideInstruction {
+    pub instruction: Instruction,
+    pub index: usize,
+    pub local: HashMap<String, DExpr>,
+}
+
+#[derive(Clone, Debug)]
 pub struct GAState {
     pub project: &'static Project,
     pub ctx: &'static DContext,
@@ -37,6 +44,8 @@ pub struct GAState {
     pub last_instruction: Option<Instruction>,
     pub last_pc: u64,
     pub registers: HashMap<String, DExpr>,
+    pub continue_in_instruction: Option<ContinueInsideInstruction>,
+    pub current_instruction: Option<Instruction>,
     pc_register: u64, // this register is special
     flags: HashMap<String, DExpr>,
     instruction_counter: usize,
@@ -101,6 +110,8 @@ impl GAState {
             last_instruction: None,
             last_pc: pc_reg,
             count_cycles: true,
+            continue_in_instruction: None,
+            current_instruction: None,
         })
     }
 
@@ -198,6 +209,8 @@ impl GAState {
             last_instruction: None,
             last_pc: pc_reg,
             count_cycles: true,
+            continue_in_instruction: None,
+            current_instruction: None,
         }
     }
 
@@ -205,18 +218,21 @@ impl GAState {
     pub fn set_register(&mut self, register: String, expr: DExpr) -> Result<()> {
         // crude solution should prbobly change
         if register == "PC" {
-                trace!("setting pc");
             let value = match expr.get_constant() {
                 Some(v) => v,
                 None => {
                     trace!("not a concrete pc try to generate possible values");
                     let values: Vec<u64> = match self.constraints.get_values(&expr, 500).unwrap() {
-                        crate::smt::Solutions::Exactly(v) => v.iter().map(|n| {match n.get_constant(){
-                            Some(v) => v,
-                            None => todo!("e"),
-                        }}).collect(),
+                        crate::smt::Solutions::Exactly(v) => v
+                            .iter()
+                            .map(|n| match n.get_constant() {
+                                Some(v) => v,
+                                None => todo!("e"),
+                            })
+                            .collect(),
                         crate::smt::Solutions::AtLeast(v) => todo!(),
                     };
+                    trace!("{} possible PC values", values.len());
                     for v in values {
                         trace!("Possible PC: {:#X}", v);
                     }
@@ -246,8 +262,7 @@ impl GAState {
                 Some(v) => Ok(v.to_owned()),
                 None => {
                     // If register do not exist yet create it with unconstrained value.
-                    let value = 
-                        self
+                    let value = self
                         .ctx
                         .unconstrained(self.project.get_word_size(), &register);
                     self.marked_symbolic.push(Variable {
@@ -257,7 +272,7 @@ impl GAState {
                     });
                     self.registers.insert(register.to_owned(), value.to_owned());
                     Ok(value)
-                },
+                }
             },
         }
     }

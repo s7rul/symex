@@ -57,4 +57,8 @@ impl DFSPathSelection {
             None => None,
         }
     }
+
+    pub fn waiting_paths(&self) -> usize {
+        self.paths.len()
+    }
 }
