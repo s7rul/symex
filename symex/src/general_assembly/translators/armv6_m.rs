@@ -40,7 +40,7 @@ fn cycle_count_m0plus_core(operation: &Operation) -> CycleCount {
             2
         } else if address <= 0x4fff_ffff && address >= 0x4000_0000 {
             // APB peripheral
-            3
+            2 + 2
         } else {
             2
         }
@@ -62,7 +62,7 @@ fn cycle_count_m0plus_core(operation: &Operation) -> CycleCount {
             2
         } else if address <= 0x4fff_ffff && address >= 0x4000_0000 {
             // APB peripheral
-            4
+            2 + 3
         } else {
             2
         }
