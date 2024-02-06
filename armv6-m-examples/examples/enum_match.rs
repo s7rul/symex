@@ -137,7 +137,7 @@ impl Valid for TestEnum2 {
     #[inline(never)]
     #[no_mangle]
     fn is_valid(&self) -> bool {
-        let mut ret = 0;
+        let mut ret = false;
 
         let input = unsafe {
             let raw_pointer = core::ptr::addr_of!(*self);
@@ -145,20 +145,20 @@ impl Valid for TestEnum2 {
         };
 
         if let TestEnum2::One = input {
-            ret = 1;
+            ret = true;
         } else if let TestEnum2::Two = input {
-            ret = 2;
+            ret = true;
         } else if let TestEnum2::Three(_) = input {
-            ret = 3;
+            ret = true;
         } else if let TestEnum2::Four(_, _) = input {
-            ret = 4;
+            ret = true;
         } else if let TestEnum2::Five(_) = input {
-            ret = 5;
+            ret = true;
         } else {
             suppress_path()
         }
         black_box(&mut ret);
-        ret > 0
+        ret
     }
 }
 
