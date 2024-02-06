@@ -2,17 +2,16 @@ use std::{collections::HashMap, fmt::Debug, fs};
 
 use armv6_m_instruction_parser::parse;
 use gimli::{DebugAbbrev, DebugInfo, DebugStr};
-use object::{Architecture, File, Object, ObjectSection, ObjectSymbol};
+use object::{Architecture, Object, ObjectSection, ObjectSymbol};
 use tracing::{debug, trace};
 
 use crate::{general_assembly::translator::Translatable, memory::MemoryError, smt::DExpr};
 
-use self::segments::{Segment, Segments};
+use self::segments::Segments;
 
 use super::{
-    instruction::Instruction,
-    state::{self, GAState},
-    DataHalfWord, DataWord, Endianness, RawDataWord, Result as SuperResult, RunConfig, WordSize,
+    instruction::Instruction, state::GAState, DataHalfWord, DataWord, Endianness, RawDataWord,
+    Result as SuperResult, RunConfig, WordSize,
 };
 
 mod dwarf_helper;

@@ -1714,12 +1714,12 @@ impl Translatable for Instruction {
         cfg.register_write_hooks.push(("PC+".to_owned(), write_pc));
 
         // reset allways done
-        let read_reset_done: MemoryReadHook = |state, addr| {
+        let read_reset_done: MemoryReadHook = |state, _addr| {
             let value = state.ctx.from_u64(0xffff_ffff, 32);
             Ok(value)
         };
-        cfg.memory_read_hooks.push((MemoryHookAddress::Single(0x4000c008), read_reset_done));
-
+        cfg.memory_read_hooks
+            .push((MemoryHookAddress::Single(0x4000c008), read_reset_done));
     }
 }
 

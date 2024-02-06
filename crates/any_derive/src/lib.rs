@@ -19,7 +19,7 @@ pub fn validate_macro_derive(input: TokenStream) -> TokenStream {
                 let var_id = &variant.ident;
 
                 match &variant.fields {
-                    Fields::Named(f) => {
+                    Fields::Named(_f) => {
                         panic!("not supported")
                     }
                     Fields::Unnamed(_) => {

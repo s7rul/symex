@@ -1,6 +1,6 @@
+#![cfg(feature = "llvm")]
 use std::path::Path;
 
-#[cfg(feature = "llvm")]
 mod test_runner_llvm {
     use symex::{
         smt::{DContext, DExpr},

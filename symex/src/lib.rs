@@ -1,7 +1,7 @@
 pub mod elf_util;
 pub mod general_assembly;
 pub mod memory;
-#[cfg(not(feature = "llvm"))]
+//#[cfg(not(feature = "llvm"))]
 pub mod run_elf;
 #[cfg(feature = "llvm")]
 pub mod run_llvm;

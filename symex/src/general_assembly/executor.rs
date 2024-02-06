@@ -5,7 +5,6 @@ use std::collections::HashMap;
 use tracing::{debug, trace};
 
 use crate::{
-    elf_util::{ExpressionType, Variable},
     general_assembly::{path_selection::Path, state::HookOrInstruction},
     smt::{DExpr, SolverError},
 };
@@ -760,7 +759,7 @@ mod test {
     use crate::{
         general_assembly::{
             executor::{add_with_carry, GAExecutor},
-            instruction::{CycleCount, Instruction, Operand, Operation},
+            instruction::{Operand, Operation},
             project::Project,
             state::GAState,
             vm::VM,

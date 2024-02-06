@@ -230,7 +230,7 @@ impl GAState {
                                 None => todo!("e"),
                             })
                             .collect(),
-                        crate::smt::Solutions::AtLeast(v) => todo!(),
+                        crate::smt::Solutions::AtLeast(_v) => todo!(),
                     };
                     trace!("{} possible PC values", values.len());
                     for v in values {

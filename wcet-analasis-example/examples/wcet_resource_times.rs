@@ -62,7 +62,7 @@ fn main() {
 
     // Hook to run when the interrupt mask is reset (looked).
     let lock_hook: fn(state: &mut GAState, addr: u64, value: DExpr, bits: u32) -> Result<()> =
-        |state, addr, value, bits| {
+        |state, _addr, value, _bits| {
             // save the current cycle count to the laps vector.
             let val = value.get_constant().unwrap().to_string();
             state.cycle_laps.push((state.cycle_count, val));
@@ -71,7 +71,7 @@ fn main() {
 
     // Hook to run when the interrupt mask is set (unlocked).
     let unlock_hook: fn(state: &mut GAState, addr: u64, value: DExpr, bits: u32) -> Result<()> =
-        |state, addr, value, bits| {
+        |state, _addr, value, _bits| {
             // save the current cycle count to the laps vector.
             let val = value.get_constant().unwrap().to_string();
             let current_instruction_cycle_count =
