@@ -21,7 +21,7 @@ use bsp::hal::{
     sio::Sio,
     watchdog::Watchdog,
 };
-use symex_lib::{end_cyclecount, any, start_cyclecount, symbolic, assume, Any, black_box, suppress_path, Valid};
+use symex_lib::{end_cyclecount, any, start_cyclecount, symbolic, assume, Any, black_box, suppress_path, Valid, Validate};
 
 #[entry]
 fn main() -> ! {
@@ -98,67 +98,14 @@ impl Any for TestEnum {
     }
 }
 
+#[derive(Validate)]
 enum TestEnum2 {
     One,
     Two,
     Three(u16),
-    Four(u16, u16),
+    Four(u16),
     Five(u16),
 }
-
-#[inline(never)]
-#[no_mangle]
-fn enum_2_if(input: &TestEnum2) {
-    let mut ret = 0;
-
-    let input = unsafe {
-        let raw_pointer = core::ptr::addr_of!(*input);
-        core::ptr::read_volatile(raw_pointer as *const TestEnum2)
-    };
-
-    if let TestEnum2::One = input {
-        ret = 1;
-    } else if let TestEnum2::Two = input {
-        ret = 2;
-    } else if let TestEnum2::Three(_) = input {
-        ret = 3;
-    } else if let TestEnum2::Four(_, _) = input {
-        ret = 4;
-    } else if let TestEnum2::Five(_) = input {
-        ret = 5;
-    } else {
-        suppress_path()
-    }
-    black_box(&mut ret);
-}
-
-impl Valid for TestEnum2 {
-
-    #[inline(never)]
-    #[no_mangle]
-    fn is_valid(&self) -> bool {
-        let input = unsafe {
-            let raw_pointer = core::ptr::addr_of!(*self);
-            core::ptr::read_volatile(raw_pointer as *const TestEnum2)
-        };
-
-        if let TestEnum2::One = input {
-            true
-        } else if let TestEnum2::Two = input {
-            true
-        } else if let TestEnum2::Three(_) = input {
-            true
-        } else if let TestEnum2::Four(_, _) = input {
-            true
-        } else if let TestEnum2::Five(_) = input {
-            true
-        } else {
-            suppress_path();
-            false
-        }
-    }
-}
-
 
 
 #[inline(never)]
@@ -175,7 +122,7 @@ fn test_validate() -> u16 {
     let mut input: TestEnum2 = TestEnum2::One;
     symbolic(&mut input);
     //enum_2_if(&input);
-    input.is_valid();
+    assume(input.is_valid());
     let r = handle_test_enum2(input);
     r
 }
@@ -187,7 +134,7 @@ fn handle_test_enum2(n: TestEnum2) -> u16 {
         TestEnum2::One => 1,
         TestEnum2::Two => simple_if(2),
         TestEnum2::Three(v) => v,
-        TestEnum2::Four(i1, i2) => i1 + i2,
+        TestEnum2::Four(i1) => i1 + i1,
         TestEnum2::Five(v) => simple_if(v),
     }
 }
