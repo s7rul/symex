@@ -10,7 +10,6 @@ rustflags = [
   "linker=flip-link",
   "-C",
   "link-arg=--nmagic",
-  #"-C", "link-arg=-Tmem_link.x",
   "-C",
   "link-arg=-Tlink.x",
   "-C",
