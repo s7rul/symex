@@ -137,28 +137,25 @@ impl Valid for TestEnum2 {
     #[inline(never)]
     #[no_mangle]
     fn is_valid(&self) -> bool {
-        let mut ret = false;
-
         let input = unsafe {
             let raw_pointer = core::ptr::addr_of!(*self);
             core::ptr::read_volatile(raw_pointer as *const TestEnum2)
         };
 
         if let TestEnum2::One = input {
-            ret = true;
+            true
         } else if let TestEnum2::Two = input {
-            ret = true;
+            true
         } else if let TestEnum2::Three(_) = input {
-            ret = true;
+            true
         } else if let TestEnum2::Four(_, _) = input {
-            ret = true;
+            true
         } else if let TestEnum2::Five(_) = input {
-            ret = true;
+            true
         } else {
-            suppress_path()
+            suppress_path();
+            false
         }
-        black_box(&mut ret);
-        ret
     }
 }
 
