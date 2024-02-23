@@ -56,7 +56,7 @@ fn main() {
     println!("Simple WCET analasis");
 
     // path to the elf file to analyse.
-    let path_to_elf_file = "target/thumbv6m-none-eabi/release/examples/rtic_simple_resourse";
+    let path_to_elf_file = "armv6-m-examples/target/thumbv6m-none-eabi/release/examples/rtic_simple_resourse";
     // name of the task in the elf file (same as associated interrupt vector for HW tasks).
     let function_name = "IO_IRQ_BANK0";
 
@@ -106,7 +106,7 @@ fn main() {
     let mut max = 0;
     let paths = results.len();
     for result in results {
-        println!("cycle laps: {:?}", result.cycle_laps);
+        //println!("cycle laps: {:?}", result.cycle_laps);
         max = max.max(result.max_cycles);
         let trace = make_trace(
             0,
@@ -114,7 +114,7 @@ fn main() {
             &result.cycle_laps,
             function_name.to_owned(),
         );
-        println!("trace: {:?}", trace);
+        println!("trace: {:#?}", trace);
     }
 
     println!(

@@ -191,8 +191,6 @@ fn main() -> ! {
     let n = test_any_u64();
     info!("n: {}", n);
     nop_loop();
-    simple_loop_llvm();
-    test_assume_llvm();
     loop {}
 }
 
