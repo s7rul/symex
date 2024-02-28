@@ -343,11 +343,32 @@ impl<'vm> GAExecutor<'vm> {
 
         self.state.current_instruction = Some(i.to_owned());
 
-        // initiate local variable storage
-        let mut local: HashMap<String, DExpr> = HashMap::new();
-        for (n, operation) in i.operations.iter().enumerate() {
-            self.current_operation_index = n;
-            self.executer_operation(operation, &mut local)?;
+        // check if we should actually execute the instruction
+        let should_run = match self.state.get_next_instruction_condition_expression() {
+            Some(c) => match c.get_constant_bool() {
+                Some(constant_c) => constant_c,
+                None => {
+                    let true_possible = self.state.constraints.is_sat_with_constraint(&c)?;
+                    let false_possible = self.state.constraints.is_sat_with_constraint(&c.not())?;
+
+                    if true_possible && false_possible {
+                        self.fork(c.not())?;
+                        self.state.constraints.assert(&c);
+                    }
+
+                    true_possible
+                }
+            },
+            None => true,
+        };
+
+        if should_run {
+            // initiate local variable storage
+            let mut local: HashMap<String, DExpr> = HashMap::new();
+            for (n, operation) in i.operations.iter().enumerate() {
+                self.current_operation_index = n;
+                self.executer_operation(operation, &mut local)?;
+            }
         }
 
         Ok(())
@@ -545,6 +566,9 @@ impl<'vm> GAExecutor<'vm> {
                 }?;
 
                 self.state.set_register("PC".to_owned(), destination)?;
+            }
+            Operation::ConditionalExecution { conditions } => {
+                self.state.add_instruction_conditions(conditions);
             }
             Operation::SetNFlag(operand) => {
                 let value = self.get_operand_value(operand, &local)?;
@@ -759,7 +783,7 @@ mod test {
     use crate::{
         general_assembly::{
             executor::{add_with_carry, GAExecutor},
-            instruction::{Operand, Operation},
+            instruction::{Condition, CycleCount, Instruction, Operand, Operation},
             project::Project,
             state::GAState,
             vm::VM,
@@ -1288,5 +1312,60 @@ mod test {
             .get_constant_bool()
             .unwrap();
         assert!(v_flag);
+    }
+
+    #[test]
+    fn test_conditional_execution() {
+        let mut vm = setup_test_vm();
+        let project = vm.project;
+        let mut executor =
+            GAExecutor::from_state(vm.paths.get_path().unwrap().state, &mut vm, project);
+        let imm_0 = Operand::Immidiate(DataWord::Word32(0));
+        let imm_1 = Operand::Immidiate(DataWord::Word32(1));
+        let mut local = HashMap::new();
+        let r0 = Operand::Register("R0".to_owned());
+
+        let program1 = vec![
+            Instruction {
+                instruction_size: 32,
+                operations: vec![Operation::SetZFlag(imm_0.clone())],
+                max_cycle: CycleCount::Value(0),
+            },
+            Instruction {
+                instruction_size: 32,
+                operations: vec![Operation::ConditionalExecution {
+                    conditions: vec![Condition::EQ, Condition::NE],
+                }],
+                max_cycle: CycleCount::Value(0),
+            },
+            Instruction {
+                instruction_size: 32,
+                operations: vec![Operation::Move {
+                    destination: r0.clone(),
+                    source: imm_1,
+                }],
+                max_cycle: CycleCount::Value(0),
+            },
+            Instruction {
+                instruction_size: 32,
+                operations: vec![Operation::Move {
+                    destination: r0.clone(),
+                    source: imm_0,
+                }],
+                max_cycle: CycleCount::Value(0),
+            },
+        ];
+
+        for p in program1 {
+            executor.execute_instruction(&p).ok();
+        }
+
+        let r0_value = executor
+            .get_operand_value(&r0, &local)
+            .ok()
+            .unwrap()
+            .get_constant()
+            .unwrap();
+        assert_eq!(r0_value, 1);
     }
 }

@@ -31,7 +31,8 @@ pub fn validate_macro_derive(input: TokenStream) -> TokenStream {
                         );
                     }
                     Fields::Unnamed(_) => {
-                        variants.push(quote!(if let #id::#var_id(t) = input { t.is_valid() } else ));
+                        variants
+                            .push(quote!(if let #id::#var_id(t) = input { t.is_valid() } else ));
                     }
                     Fields::Unit => {
                         variants.push(quote!(if let #id::#var_id = input { true } else ));
