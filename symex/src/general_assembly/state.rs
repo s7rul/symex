@@ -1,6 +1,6 @@
 //! Holds the state in general assembly execution.
 
-use std::collections::HashMap;
+use std::collections::{HashMap, VecDeque};
 
 use tracing::{debug, trace};
 
@@ -50,6 +50,7 @@ pub struct GAState {
     flags: HashMap<String, DExpr>,
     instruction_counter: usize,
     has_jumped: bool,
+    instruction_conditions: VecDeque<Condition>,
 }
 
 impl GAState {
@@ -112,6 +113,7 @@ impl GAState {
             count_cycles: true,
             continue_in_instruction: None,
             current_instruction: None,
+            instruction_conditions: VecDeque::new(),
         })
     }
 
@@ -165,6 +167,21 @@ impl GAState {
         self.last_instruction = Some(instruction);
     }
 
+    pub fn add_instruction_conditions(&mut self, conditions: &Vec<Condition>) {
+        for condition in conditions {
+            self.instruction_conditions.push_back(condition.to_owned());
+        }
+    }
+
+    pub fn get_next_instruction_condition_expression(&mut self) -> Option<DExpr> {
+        match self.instruction_conditions.pop_front() {
+            Some(condition) => {
+                Some(self.get_expr(&condition).unwrap()) // TODO add error handling
+            }
+            None => None,
+        }
+    }
+
     /// Create a state used for testing.
     pub fn create_test_state(
         project: &'static Project,
@@ -211,6 +228,7 @@ impl GAState {
             count_cycles: true,
             continue_in_instruction: None,
             current_instruction: None,
+            instruction_conditions: VecDeque::new(),
         }
     }
 

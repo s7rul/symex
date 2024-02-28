@@ -182,6 +182,10 @@ pub enum Operation {
         condition: Condition,
     },
 
+    /// Conditional execution
+    /// Will only run the following instructions i instructions if the i:the condition in the list is true.
+    ConditionalExecution { conditions: Vec<Condition> },
+
     /// Set the negative flag
     SetNFlag(Operand),
 
