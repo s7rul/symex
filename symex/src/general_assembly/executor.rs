@@ -312,7 +312,7 @@ impl<'vm> GAExecutor<'vm> {
         for i in inst_to_continue.index..inst_to_continue.instruction.operations.len() {
             let operation = &inst_to_continue.instruction.operations[i];
             self.current_operation_index = i;
-            self.executer_operation(operation, &mut local)?;
+            self.execute_operation(operation, &mut local)?;
         }
         Ok(())
     }
@@ -347,14 +347,14 @@ impl<'vm> GAExecutor<'vm> {
         let mut local: HashMap<String, DExpr> = HashMap::new();
         for (n, operation) in i.operations.iter().enumerate() {
             self.current_operation_index = n;
-            self.executer_operation(operation, &mut local)?;
+            self.execute_operation(operation, &mut local)?;
         }
 
         Ok(())
     }
 
     /// Execute a single operation or all operations contained inside a operation.
-    fn executer_operation(
+    fn execute_operation(
         &mut self,
         operation: &Operation,
         local: &mut HashMap<String, DExpr>,
@@ -881,7 +881,7 @@ mod test {
             destination: operand_r0.clone(),
             source: Operand::Immidiate(DataWord::Word32(42)),
         };
-        executor.executer_operation(&operation, &mut local).ok();
+        executor.execute_operation(&operation, &mut local).ok();
 
         let r0 = executor
             .get_operand_value(&operand_r0, &local)
@@ -896,7 +896,7 @@ mod test {
             destination: local_r0.clone(),
             source: operand_r0.clone(),
         };
-        executor.executer_operation(&operation, &mut local).ok();
+        executor.execute_operation(&operation, &mut local).ok();
 
         let r0 = executor
             .get_operand_value(&local_r0, &local)
@@ -912,7 +912,7 @@ mod test {
             destination: memmory_op.clone(),
             source: imm.clone(),
         };
-        executor.executer_operation(&operation, &mut local).ok();
+        executor.execute_operation(&operation, &mut local).ok();
 
         let dexpr_addr = executor.get_dexpr_from_dataword(DataWord::Word32(42));
         let in_memmory_value = executor
@@ -929,7 +929,7 @@ mod test {
             destination: local_r0.clone(),
             source: memmory_op.clone(),
         };
-        executor.executer_operation(&operation, &mut local).ok();
+        executor.execute_operation(&operation, &mut local).ok();
 
         let local_value = executor
             .get_operand_value(&local_r0, &local)
@@ -960,7 +960,7 @@ mod test {
             operand1: imm_42.clone(),
             operand2: imm_16.clone(),
         };
-        executor.executer_operation(&operation, &mut local).ok();
+        executor.execute_operation(&operation, &mut local).ok();
 
         let r0_value = executor
             .get_operand_value(&r0, &local)
@@ -975,7 +975,7 @@ mod test {
             operand1: r0.clone(),
             operand2: imm_16.clone(),
         };
-        executor.executer_operation(&operation, &mut local).ok();
+        executor.execute_operation(&operation, &mut local).ok();
 
         let r0_value = executor
             .get_operand_value(&r0, &local)
@@ -990,7 +990,7 @@ mod test {
             operand1: imm_42.clone(),
             operand2: imm_minus70.clone(),
         };
-        executor.executer_operation(&operation, &mut local).ok();
+        executor.execute_operation(&operation, &mut local).ok();
 
         let r0_value = executor
             .get_operand_value(&r0, &local)
@@ -1005,7 +1005,7 @@ mod test {
             operand1: imm_42.clone(),
             operand2: imm_umax.clone(),
         };
-        executor.executer_operation(&operation, &mut local).ok();
+        executor.execute_operation(&operation, &mut local).ok();
 
         let r0_value = executor
             .get_operand_value(&r0, &local)
@@ -1039,7 +1039,7 @@ mod test {
             operand2: imm_12.clone(),
         };
 
-        executor.executer_operation(&operation, &mut local).ok();
+        executor.execute_operation(&operation, &mut local).ok();
         let result = executor
             .get_operand_value(&r0, &local)
             .unwrap()
@@ -1056,7 +1056,7 @@ mod test {
             operand2: imm_12.clone(),
         };
 
-        executor.executer_operation(&operation, &mut local).ok();
+        executor.execute_operation(&operation, &mut local).ok();
         let result = executor
             .get_operand_value(&r0, &local)
             .unwrap()
@@ -1073,7 +1073,7 @@ mod test {
             operand2: imm_12.clone(),
         };
 
-        executor.executer_operation(&operation, &mut local).ok();
+        executor.execute_operation(&operation, &mut local).ok();
         let result = executor
             .get_operand_value(&r0, &local)
             .unwrap()
@@ -1103,7 +1103,7 @@ mod test {
             operand1: imm_42.clone(),
             operand2: imm_16.clone(),
         };
-        executor.executer_operation(&operation, &mut local).ok();
+        executor.execute_operation(&operation, &mut local).ok();
 
         let r0_value = executor
             .get_operand_value(&r0, &local)
@@ -1118,7 +1118,7 @@ mod test {
             operand1: r0.clone(),
             operand2: imm_16.clone(),
         };
-        executor.executer_operation(&operation, &mut local).ok();
+        executor.execute_operation(&operation, &mut local).ok();
 
         let r0_value = executor
             .get_operand_value(&r0, &local)
@@ -1133,7 +1133,7 @@ mod test {
             operand1: imm_42.clone(),
             operand2: imm_minus70.clone(),
         };
-        executor.executer_operation(&operation, &mut local).ok();
+        executor.execute_operation(&operation, &mut local).ok();
 
         let r0_value = executor
             .get_operand_value(&r0, &local)
@@ -1148,7 +1148,7 @@ mod test {
             operand1: imm_42.clone(),
             operand2: imm_imin.clone(),
         };
-        executor.executer_operation(&operation, &mut local).ok();
+        executor.execute_operation(&operation, &mut local).ok();
 
         let r0_value = executor
             .get_operand_value(&r0, &local)
@@ -1178,7 +1178,7 @@ mod test {
             operand1: imm_42.clone(),
             operand2: imm_16.clone(),
         };
-        executor.executer_operation(&operation, &mut local).ok();
+        executor.execute_operation(&operation, &mut local).ok();
 
         let r0_value = executor
             .get_operand_value(&r0, &local)
@@ -1193,7 +1193,7 @@ mod test {
             operand1: imm_42.clone(),
             operand2: imm_minus_16.clone(),
         };
-        executor.executer_operation(&operation, &mut local).ok();
+        executor.execute_operation(&operation, &mut local).ok();
 
         let r0_value = executor
             .get_operand_value(&r0, &local)
@@ -1208,7 +1208,7 @@ mod test {
             operand1: imm_minus_42.clone(),
             operand2: imm_16.clone(),
         };
-        executor.executer_operation(&operation, &mut local).ok();
+        executor.execute_operation(&operation, &mut local).ok();
 
         let r0_value = executor
             .get_operand_value(&r0, &local)
@@ -1223,7 +1223,7 @@ mod test {
             operand1: imm_minus_42.clone(),
             operand2: imm_minus_16.clone(),
         };
-        executor.executer_operation(&operation, &mut local).ok();
+        executor.execute_operation(&operation, &mut local).ok();
 
         let r0_value = executor
             .get_operand_value(&r0, &local)
@@ -1253,7 +1253,7 @@ mod test {
             sub: true,
             carry: false,
         };
-        executor.executer_operation(&operation, &mut local).ok();
+        executor.execute_operation(&operation, &mut local).ok();
 
         let v_flag = executor
             .state
@@ -1270,7 +1270,7 @@ mod test {
             sub: false,
             carry: false,
         };
-        executor.executer_operation(&operation, &mut local).ok();
+        executor.execute_operation(&operation, &mut local).ok();
 
         let v_flag = executor
             .state
@@ -1287,7 +1287,7 @@ mod test {
             sub: true,
             carry: false,
         };
-        executor.executer_operation(&operation, &mut local).ok();
+        executor.execute_operation(&operation, &mut local).ok();
 
         let v_flag = executor
             .state
