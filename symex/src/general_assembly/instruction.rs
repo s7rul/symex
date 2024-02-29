@@ -145,6 +145,30 @@ pub enum Operation {
         bits: u32,
     },
 
+    /// Count the number of ones in the operand.
+    CountOnes {
+        destination: Operand,
+        operand: Operand,
+    },
+
+    /// Count the number of zeroes in the operand.
+    CountZeroes {
+        destination: Operand,
+        operand: Operand,
+    },
+
+    /// Count the number of leading ones (most significant to leas significant).
+    CountLeadingOnes {
+        destination: Operand,
+        operand: Operand,
+    },
+
+    /// Count the number of leading zeroes (most significant to leas significant).
+    CountLeadingZeroes {
+        destination: Operand,
+        operand: Operand,
+    },
+
     /// Sign extend
     SignExtend {
         destination: Operand,

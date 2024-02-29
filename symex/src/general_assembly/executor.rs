@@ -727,6 +727,14 @@ impl<'vm> GAExecutor<'vm> {
                 let c = result.srl(&word_size_minus_one).resize_unsigned(1);
                 self.state.set_flag("C".to_owned(), c);
             }
+            Operation::CountOnes { destination, operand } => {
+                let operand = self.get_operand_value(operand, local)?;
+                let word_size = self.project.get_word_size();
+                todo!()
+            },
+            Operation::CountZeroes { destination, operand } => todo!(),
+            Operation::CountLeadingOnes { destination, operand } => todo!(),
+            Operation::CountLeadingZeroes { destination, operand } => todo!(),
         }
         Ok(())
     }
