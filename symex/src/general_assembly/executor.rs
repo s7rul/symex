@@ -6,7 +6,7 @@ use tracing::{debug, trace};
 
 use crate::{
     general_assembly::{path_selection::Path, state::HookOrInstruction},
-    smt::{DExpr, SolverError},
+    smt::{smt_boolector::BoolectorSolverContext, DExpr, SolverError},
 };
 
 use super::{
@@ -727,17 +727,91 @@ impl<'vm> GAExecutor<'vm> {
                 let c = result.srl(&word_size_minus_one).resize_unsigned(1);
                 self.state.set_flag("C".to_owned(), c);
             }
-            Operation::CountOnes { destination, operand } => {
+            Operation::CountOnes {
+                destination,
+                operand,
+            } => {
                 let operand = self.get_operand_value(operand, local)?;
-                let word_size = self.project.get_word_size();
-                todo!()
+                let result = count_ones(&operand, self.state.ctx, self.project.get_word_size());
+                self.set_operand_value(destination, result, local)?;
+            }
+            Operation::CountZeroes {
+                destination,
+                operand,
+            } => {
+                let operand = self.get_operand_value(operand, local)?;
+                let result = count_zeroes(&operand, self.state.ctx, self.project.get_word_size());
+                self.set_operand_value(destination, result, local)?;
             },
-            Operation::CountZeroes { destination, operand } => todo!(),
-            Operation::CountLeadingOnes { destination, operand } => todo!(),
-            Operation::CountLeadingZeroes { destination, operand } => todo!(),
+            Operation::CountLeadingOnes {
+                destination,
+                operand,
+            } => {
+                let operand = self.get_operand_value(operand, local)?;
+                let result = count_leading_ones(&operand, self.state.ctx, self.project.get_word_size());
+                self.set_operand_value(destination, result, local)?;
+            },
+            Operation::CountLeadingZeroes {
+                destination,
+                operand,
+            } => {
+                let operand = self.get_operand_value(operand, local)?;
+                let result = count_leading_zeroes(&operand, self.state.ctx, self.project.get_word_size());
+                self.set_operand_value(destination, result, local)?;
+            },
         }
         Ok(())
     }
+}
+
+fn count_ones(input: &DExpr, ctx: &BoolectorSolverContext, word_size: u32) -> DExpr {
+    let mut count = ctx.from_u64(0, word_size);
+    let mask = ctx.from_u64(1, word_size);
+    for n in 0..word_size {
+        let symbolic_n = ctx.from_u64(n as u64, word_size);
+        let to_add = input.srl(&symbolic_n).and(&mask);
+        count = count.add(&to_add);
+    }
+    count
+}
+
+fn count_zeroes(input: &DExpr, ctx: &BoolectorSolverContext, word_size: u32) -> DExpr {
+    let input = input.not();
+    let mut count = ctx.from_u64(0, word_size);
+    let mask = ctx.from_u64(1, word_size);
+    for n in 0..word_size {
+        let symbolic_n = ctx.from_u64(n as u64, word_size);
+        let to_add = input.srl(&symbolic_n).and(&mask);
+        count = count.add(&to_add);
+    }
+    count
+}
+
+fn count_leading_ones(input: &DExpr, ctx: &BoolectorSolverContext, word_size: u32) -> DExpr {
+    let mut count = ctx.from_u64(0, word_size);
+    let mut stop_count_mask = ctx.from_u64(1, word_size);
+    let mask = ctx.from_u64(1, word_size);
+    for n in (0..word_size).into_iter().rev() {
+        let symbolic_n = ctx.from_u64(n as u64, word_size);
+        let to_add = input.srl(&symbolic_n).and(&mask).and(&stop_count_mask);
+        stop_count_mask = to_add.clone();
+        count = count.add(&to_add);
+    }
+    count
+}
+
+fn count_leading_zeroes(input: &DExpr, ctx: &BoolectorSolverContext, word_size: u32) -> DExpr {
+    let input = input.not();
+    let mut count = ctx.from_u64(0, word_size);
+    let mut stop_count_mask = ctx.from_u64(1, word_size);
+    let mask = ctx.from_u64(1, word_size);
+    for n in (0..word_size).into_iter().rev() {
+        let symbolic_n = ctx.from_u64(n as u64, word_size);
+        let to_add = input.srl(&symbolic_n).and(&mask).and(&stop_count_mask);
+        stop_count_mask = to_add.clone();
+        count = count.add(&to_add);
+    }
+    count
 }
 
 /// Does a add with carry and returns result, carry out and overflow like a hw adder.
@@ -766,7 +840,7 @@ mod test {
 
     use crate::{
         general_assembly::{
-            executor::{add_with_carry, GAExecutor},
+            executor::{add_with_carry, count_leading_zeroes, GAExecutor},
             instruction::{Operand, Operation},
             project::Project,
             state::GAState,
@@ -775,6 +849,82 @@ mod test {
         },
         smt::{DContext, DSolver},
     };
+
+    use super::{count_ones, count_leading_ones, count_zeroes};
+
+    #[test]
+    fn test_count_ones_concrete() {
+        let ctx = DContext::new();
+        let num1 = ctx.from_u64(1, 32);
+        let num32 = ctx.from_u64(32, 32);
+        let numff = ctx.from_u64(0xff, 32);
+        let result = count_ones(&num1, &ctx, 32);
+        assert_eq!(result.get_constant().unwrap(), 1);
+        let result = count_ones(&num32, &ctx, 32);
+        assert_eq!(result.get_constant().unwrap(), 1);
+        let result = count_ones(&numff, &ctx, 32);
+        assert_eq!(result.get_constant().unwrap(), 8);
+    }
+
+    #[test]
+    fn test_count_ones_symbolic() {
+        let ctx = DContext::new();
+        let solver = DSolver::new(&ctx);
+        let any_u32 = ctx.unconstrained(32, "any1");
+        let num_0x100 = ctx.from_u64(0x100, 32);
+        let num_8 = ctx.from_u64(8, 32);
+        solver.assert(&any_u32.ult(&num_0x100));
+        let result = count_ones(&any_u32, &ctx, 32);
+        let result_below_or_equal_8 = result.ulte(&num_8);
+        let result_above_8 = result.ugt(&num_8);
+        let can_be_below_or_equal_8 = solver.is_sat_with_constraint(&result_below_or_equal_8).unwrap();
+        let can_be_above_8 = solver.is_sat_with_constraint(&result_above_8).unwrap();
+        assert!(can_be_below_or_equal_8);
+        assert!(!can_be_above_8);
+    }
+
+    #[test]
+    fn test_count_zeroes_concrete() {
+        let ctx = DContext::new();
+        let num1 = ctx.from_u64(!1, 32);
+        let num32 = ctx.from_u64(!32, 32);
+        let numff = ctx.from_u64(!0xff, 32);
+        let result = count_zeroes(&num1, &ctx, 32);
+        assert_eq!(result.get_constant().unwrap(), 1);
+        let result = count_zeroes(&num32, &ctx, 32);
+        assert_eq!(result.get_constant().unwrap(), 1);
+        let result = count_zeroes(&numff, &ctx, 32);
+        assert_eq!(result.get_constant().unwrap(), 8);
+    }
+
+    #[test]
+    fn test_count_leading_ones_concrete() {
+        let ctx = DContext::new();
+        let input = ctx.from_u64(0b1000_0000, 8);
+        let result = count_leading_ones(&input, &ctx, 8);
+        assert_eq!(result.get_constant().unwrap(), 1);
+        let input = ctx.from_u64(0b1100_0000, 8);
+        let result = count_leading_ones(&input, &ctx, 8);
+        assert_eq!(result.get_constant().unwrap(), 2);
+        let input = ctx.from_u64(0b1110_0011, 8);
+        let result = count_leading_ones(&input, &ctx, 8);
+        assert_eq!(result.get_constant().unwrap(), 3);
+    }
+
+    #[test]
+    fn test_count_leading_zeroes_concrete() {
+        let ctx = DContext::new();
+        let input = ctx.from_u64(!0b1000_0000, 8);
+        let result = count_leading_zeroes(&input, &ctx, 8);
+        assert_eq!(result.get_constant().unwrap(), 1);
+        let input = ctx.from_u64(!0b1100_0000, 8);
+        let result = count_leading_zeroes(&input, &ctx, 8);
+        assert_eq!(result.get_constant().unwrap(), 2);
+        let input = ctx.from_u64(!0b1110_0011, 8);
+        let result = count_leading_zeroes(&input, &ctx, 8);
+        assert_eq!(result.get_constant().unwrap(), 3);
+    }
+
 
     #[test]
     fn test_add_with_carry() {
