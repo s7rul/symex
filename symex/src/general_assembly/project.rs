@@ -5,13 +5,17 @@ use gimli::{DebugAbbrev, DebugInfo, DebugStr};
 use object::{Architecture, Object, ObjectSection, ObjectSymbol};
 use tracing::{debug, trace};
 
-use crate::{general_assembly::translator::Translatable, memory::MemoryError, smt::DExpr};
+use crate::{
+    general_assembly::arch::{arch_from_family, arm::Arm, Arch},
+    memory::MemoryError,
+    smt::DExpr,
+};
 
 use self::segments::Segments;
 
 use super::{
-    instruction::Instruction, state::GAState, DataHalfWord, DataWord, Endianness, RawDataWord,
-    Result as SuperResult, RunConfig, WordSize,
+    arch::ArchError, instruction::Instruction, state::GAState, DataHalfWord, DataWord, Endianness,
+    RawDataWord, Result as SuperResult, RunConfig, WordSize,
 };
 
 mod dwarf_helper;
@@ -31,6 +35,9 @@ pub enum ProjectError {
 
     #[error("Unavalable operation")]
     UnabvalableOperation,
+
+    #[error("Architecture specific error")]
+    ArchError(#[from] ArchError),
 }
 
 #[derive(Debug, Clone, Copy)]
@@ -75,7 +82,6 @@ pub struct Project {
     segments: Segments,
     word_size: WordSize,
     endianness: Endianness,
-    architecture: object::Architecture,
     symtab: HashMap<String, u64>,
     pc_hooks: PCHooks,
     reg_read_hooks: RegisterReadHooks,
@@ -84,6 +90,7 @@ pub struct Project {
     range_memory_read_hooks: RangeMemoryReadHooks,
     single_memory_write_hooks: SingleMemoryWriteHooks,
     range_memory_write_hooks: RangeMemoryWriteHooks,
+    architecture: Box<dyn Arch>,
 }
 
 fn construct_register_read_hooks(hooks: Vec<(String, RegisterReadHook)>) -> RegisterReadHooks {
@@ -145,13 +152,13 @@ fn construct_memory_read_hooks(
 }
 
 impl Project {
-    pub fn manual_project(
+    pub fn manual_project<A: Arch + 'static>(
         program_memory: Vec<u8>,
         start_addr: u64,
         end_addr: u64,
         word_size: WordSize,
         endianness: Endianness,
-        architecture: object::Architecture,
+        architecture: A,
         symtab: HashMap<String, u64>,
         pc_hooks: PCHooks,
         reg_read_hooks: RegisterReadHooks,
@@ -165,7 +172,7 @@ impl Project {
             segments: Segments::from_single_segment(program_memory, start_addr, end_addr),
             word_size,
             endianness,
-            architecture,
+            architecture: Box::new(architecture),
             symtab,
             pc_hooks,
             reg_read_hooks,
@@ -230,12 +237,15 @@ impl Project {
         let debug_str = obj_file.section_by_name(".debug_str").unwrap();
         let debug_str = DebugStr::new(debug_str.data().unwrap(), gimli_endian);
 
-        match architecture {
+        let architecture = match architecture {
             Architecture::Arm => {
-                armv6_m_instruction_parser::instructons::Instruction::add_hooks(cfg)
+                // Get a generic arm arch using dependecy injection
+                arch_from_family::<Arm>(&obj_file)
             }
             _ => todo!(),
         }
+        .unwrap();
+        architecture.add_hooks(cfg);
         let pc_hooks = cfg.pc_hooks.clone();
 
         let pc_hooks =
@@ -355,15 +365,7 @@ impl Project {
     }
 
     fn instruction_from_array_ptr(&self, data: &[u8]) -> Result<Instruction> {
-        match self.architecture {
-            object::Architecture::Arm => {
-                // probobly right add more cheks later or custom enum etc.
-                let arm_instruction = parse(data).unwrap();
-                trace!("instruction read: {:?}", arm_instruction);
-                Ok(arm_instruction.translate())
-            }
-            _ => todo!(),
-        }
+        Ok(self.architecture.translate(data.clone())?)
     }
 
     /// Get a byte of data from program memory.

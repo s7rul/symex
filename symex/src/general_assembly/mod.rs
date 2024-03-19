@@ -8,8 +8,7 @@ pub mod path_selection;
 pub mod project;
 pub mod run_config;
 pub mod state;
-pub mod translator;
-pub mod translators;
+pub mod arch;
 pub mod vm;
 
 pub use run_config::*;

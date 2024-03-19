@@ -766,23 +766,25 @@ impl<'vm> GAExecutor<'vm> {
                 let operand = self.get_operand_value(operand, local)?;
                 let result = count_zeroes(&operand, self.state.ctx, self.project.get_word_size());
                 self.set_operand_value(destination, result, local)?;
-            },
+            }
             Operation::CountLeadingOnes {
                 destination,
                 operand,
             } => {
                 let operand = self.get_operand_value(operand, local)?;
-                let result = count_leading_ones(&operand, self.state.ctx, self.project.get_word_size());
+                let result =
+                    count_leading_ones(&operand, self.state.ctx, self.project.get_word_size());
                 self.set_operand_value(destination, result, local)?;
-            },
+            }
             Operation::CountLeadingZeroes {
                 destination,
                 operand,
             } => {
                 let operand = self.get_operand_value(operand, local)?;
-                let result = count_leading_zeroes(&operand, self.state.ctx, self.project.get_word_size());
+                let result =
+                    count_leading_zeroes(&operand, self.state.ctx, self.project.get_word_size());
                 self.set_operand_value(destination, result, local)?;
-            },
+            }
         }
         Ok(())
     }
@@ -864,6 +866,7 @@ mod test {
 
     use crate::{
         general_assembly::{
+            arch::{arm::v6::ArmV6M, Arch},
             executor::{add_with_carry, count_leading_zeroes, GAExecutor},
             instruction::{Condition, CycleCount, Instruction, Operand, Operation},
             project::Project,
@@ -874,7 +877,7 @@ mod test {
         smt::{DContext, DSolver},
     };
 
-    use super::{count_ones, count_leading_ones, count_zeroes};
+    use super::{count_leading_ones, count_ones, count_zeroes};
 
     #[test]
     fn test_count_ones_concrete() {
@@ -901,7 +904,9 @@ mod test {
         let result = count_ones(&any_u32, &ctx, 32);
         let result_below_or_equal_8 = result.ulte(&num_8);
         let result_above_8 = result.ugt(&num_8);
-        let can_be_below_or_equal_8 = solver.is_sat_with_constraint(&result_below_or_equal_8).unwrap();
+        let can_be_below_or_equal_8 = solver
+            .is_sat_with_constraint(&result_below_or_equal_8)
+            .unwrap();
         let can_be_above_8 = solver.is_sat_with_constraint(&result_above_8).unwrap();
         assert!(can_be_below_or_equal_8);
         assert!(!can_be_above_8);
@@ -948,7 +953,6 @@ mod test {
         let result = count_leading_zeroes(&input, &ctx, 8);
         assert_eq!(result.get_constant().unwrap(), 3);
     }
-
 
     #[test]
     fn test_add_with_carry() {
@@ -1022,7 +1026,7 @@ mod test {
             0,
             WordSize::Bit32,
             Endianness::Little,
-            object::Architecture::Arm,
+            ArmV6M{},
             HashMap::new(),
             HashMap::new(),
             HashMap::new(),

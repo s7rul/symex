@@ -1,296 +1,26 @@
-//! Translator for the armv6-m instruction set
+//! Defines translation rules from arm [`Operation`]s to general assembly
+//! [`Operation`](GAOperation)s.
 
 use armv6_m_instruction_parser::{
+    conditions::Condition as ArmCodition,
     instructons::{Instruction, Operation},
     registers::{Register, SpecialRegister},
 };
-use regex::Regex;
-use tracing::trace;
 
-use crate::{
-    elf_util::{ExpressionType, Variable},
-    general_assembly::{
-        instruction::{Condition, CycleCount, Operand},
-        project::{MemoryHookAddress, MemoryReadHook, PCHook, RegisterReadHook, RegisterWriteHook},
-        state::GAState,
-        translator::Translatable,
-        DataWord, RunConfig,
-    },
+use crate::general_assembly::{
+    instruction::{Condition, Instruction as GAInstruction, Operand, Operation as GAOperation},
+    DataWord,
 };
 
-type GAInstruction = crate::general_assembly::instruction::Instruction;
-type GAOperation = crate::general_assembly::instruction::Operation;
-type ArmCodition = armv6_m_instruction_parser::conditions::Condition;
+use super::ArmV6M;
 
-fn cycle_count_m0plus_core(operation: &Operation) -> CycleCount {
-    // SIO based on the rp2040 make this configurable later
-    let address_max_cycle_function: fn(state: &GAState) -> usize = |state| {
-        let address = match state.registers.get("LastAddr").unwrap().get_constant() {
-            Some(v) => v,
-            None => return 2,
-        };
-
-        if address <= 0xdfffffff && address >= 0xd0000000 {
-            1
-        } else {
-            2
-        }
-    };
-    match operation {
-        Operation::ADCReg { m: _, n: _, d: _ } => CycleCount::Value(1),
-        Operation::ADDImm { imm: _, n: _, d: _ } => CycleCount::Value(1),
-        Operation::ADDReg { m: _, n: _, d } => {
-            let max_cycle = if *d == Register::PC { 2 } else { 1 };
-            CycleCount::Value(max_cycle)
-        }
-        Operation::ADDImmSP { d: _, imm: _ } => CycleCount::Value(1),
-        Operation::ADDRegSP { d: _, m: _ } => CycleCount::Value(1),
-        Operation::ADR { d: _, imm: _ } => CycleCount::Value(1),
-        Operation::ANDReg { m: _, dn: _ } => CycleCount::Value(1),
-        Operation::ASRImm { imm: _, m: _, d: _ } => CycleCount::Value(1),
-        Operation::ASRReg { m: _, dn: _ } => CycleCount::Value(1),
-        Operation::B { cond: _, imm: _ } => {
-            let max_cycle: fn(state: &GAState) -> usize = |state| {
-                if state.get_has_jumped() {
-                    2
-                } else {
-                    1
-                }
-            };
-            CycleCount::Function(max_cycle)
-        }
-        Operation::BICReg { m: _, dn: _ } => CycleCount::Value(1),
-        Operation::BKPT { imm: _ } => CycleCount::Value(0),
-        Operation::BL { imm: _ } => CycleCount::Value(3),
-        Operation::BLXReg { m: _ } => CycleCount::Value(2),
-        Operation::BX { m: _ } => CycleCount::Value(2),
-        Operation::CMNReg { m: _, n: _ } => CycleCount::Value(1),
-        Operation::CMPImm { n: _, imm: _ } => CycleCount::Value(1),
-        Operation::CMPReg { m: _, n: _ } => CycleCount::Value(1),
-        Operation::CPS { im: _ } => CycleCount::Value(1),
-        Operation::CPY => {
-            // this is not a real instruction is equvelatn to mov
-            unreachable!()
-        }
-        Operation::DMB { option: _ } => CycleCount::Value(3),
-        Operation::DSB { option: _ } => CycleCount::Value(3),
-        Operation::EORReg { m: _, dn: _ } => CycleCount::Value(1),
-        Operation::ISB { option: _ } => CycleCount::Value(3),
-        Operation::LDM { n: _, reg_list } => {
-            let max_cycle = 1 + reg_list.len();
-            CycleCount::Value(max_cycle)
-        }
-
-        // \/\/\/\/ Can be one depending on core implementation and address \/\/\/\/
-        Operation::LDRImm { imm: _, n: _, t: _ } => {
-            CycleCount::Function(address_max_cycle_function)
-        }
-        Operation::LDRLiteral { t: _, imm: _ } => CycleCount::Function(address_max_cycle_function),
-        Operation::LDRReg { m: _, n: _, t: _ } => CycleCount::Function(address_max_cycle_function),
-        Operation::LDRBImm { imm: _, n: _, t: _ } => {
-            CycleCount::Function(address_max_cycle_function)
-        }
-        Operation::LDRBReg { m: _, n: _, t: _ } => CycleCount::Function(address_max_cycle_function),
-        Operation::LDRHImm { imm: _, n: _, t: _ } => {
-            CycleCount::Function(address_max_cycle_function)
-        }
-        Operation::LDRHReg { m: _, n: _, t: _ } => CycleCount::Function(address_max_cycle_function),
-        Operation::LDRSBReg { m: _, n: _, t: _ } => {
-            CycleCount::Function(address_max_cycle_function)
-        }
-        Operation::LDRSH { m: _, n: _, t: _ } => CycleCount::Function(address_max_cycle_function),
-        // /\/\/\/\ Can be one depending on core implementation and address /\/\/\/\
-        Operation::LSLImm { imm: _, m: _, d: _ } => CycleCount::Value(1),
-        Operation::LSLReg { m: _, dn: _ } => CycleCount::Value(1),
-        Operation::LSRImm { imm: _, m: _, d: _ } => CycleCount::Value(1),
-        Operation::LSRReg { m: _, dn: _ } => CycleCount::Value(1),
-        Operation::MOVImm { d: _, imm: _ } => CycleCount::Value(1),
-        Operation::MOVReg {
-            m: _,
-            d,
-            set_flags: _,
-        } => {
-            let max_cycle = if *d == Register::PC { 2 } else { 1 };
-            CycleCount::Value(max_cycle)
-        }
-        Operation::MRS { d: _, sysm: _ } => CycleCount::Value(3),
-        Operation::MSRReg { n: _, sysm: _ } => CycleCount::Value(3),
-        Operation::MUL { n: _, dm: _ } => {
-            CycleCount::Value(32) // Can be one depending on core implementation might be able to read this from somewhere.
-        }
-        Operation::MVNReg { m: _, d: _ } => CycleCount::Value(1),
-        Operation::NOP => CycleCount::Value(1),
-        Operation::ORRReg { m: _, dn: _ } => CycleCount::Value(1),
-        Operation::POP { reg_list } => {
-            let max_cycle = if reg_list.contains(&Register::PC) {
-                3
-            } else {
-                1
-            } + reg_list.len();
-            CycleCount::Value(max_cycle)
-        }
-        Operation::PUSH { reg_list } => CycleCount::Value(1 + reg_list.len()),
-        Operation::REV { m: _, d: _ } => CycleCount::Value(1),
-        Operation::REV16 { m: _, d: _ } => CycleCount::Value(1),
-        Operation::REVSH { m: _, d: _ } => CycleCount::Value(1),
-        Operation::RORReg { m: _, dn: _ } => CycleCount::Value(1),
-        Operation::RSBImm { n: _, d: _ } => CycleCount::Value(1),
-        Operation::SBCReg { m: _, dn: _ } => CycleCount::Value(1),
-        Operation::SEV => CycleCount::Value(1),
-        Operation::STM { n: _, reg_list } => CycleCount::Value(1 + reg_list.len()),
-
-        // \/\/\/\/ Can be one depending on core implementation and address \/\/\/\/
-        Operation::STRImm { imm: _, n: _, t: _ } => {
-            CycleCount::Function(address_max_cycle_function)
-        }
-        Operation::STRReg { m: _, n: _, t: _ } => CycleCount::Function(address_max_cycle_function),
-        Operation::STRBImm { imm: _, n: _, t: _ } => {
-            CycleCount::Function(address_max_cycle_function)
-        }
-        Operation::STRBReg { m: _, n: _, t: _ } => CycleCount::Function(address_max_cycle_function),
-        Operation::STRHImm { imm: _, n: _, t: _ } => {
-            CycleCount::Function(address_max_cycle_function)
-        }
-        Operation::STRHReg { m: _, n: _, t: _ } => CycleCount::Function(address_max_cycle_function),
-        // /\/\/\/\ Can be one depending on core implementation and address /\/\/\/\
-        Operation::SUBImm { imm: _, n: _, d: _ } => CycleCount::Value(1),
-        Operation::SUBReg { m: _, n: _, d: _ } => CycleCount::Value(1),
-        Operation::SUBImmSP { imm: _ } => CycleCount::Value(1),
-        Operation::SVC { imm: _ } => CycleCount::Value(0),
-        Operation::SXTB { m: _, d: _ } => CycleCount::Value(1),
-        Operation::SXTH { m: _, d: _ } => CycleCount::Value(1),
-        Operation::TSTReg { m: _, n: _ } => CycleCount::Value(1),
-        Operation::UXTB { m: _, d: _ } => CycleCount::Value(1),
-        Operation::UXTH { m: _, d: _ } => CycleCount::Value(1),
-        Operation::WFE => todo!(),
-        Operation::WFI => todo!(),
-        Operation::YIELD => todo!(),
-        Operation::UDF { imm:_imm } => unimplemented!()
-    }
-}
-
-#[allow(dead_code)]
-fn cycle_count_m0_core(operation: &Operation) -> CycleCount {
-    match operation {
-        Operation::ADCReg { m: _, n: _, d: _ } => CycleCount::Value(1),
-        Operation::ADDImm { imm: _, n: _, d: _ } => CycleCount::Value(1),
-        Operation::ADDReg { m: _, n: _, d } => {
-            let max_cycle = if *d == Register::PC { 3 } else { 1 };
-            CycleCount::Value(max_cycle)
-        }
-        Operation::ADDImmSP { d: _, imm: _ } => CycleCount::Value(1),
-        Operation::ADDRegSP { d: _, m: _ } => CycleCount::Value(1),
-        Operation::ADR { d: _, imm: _ } => CycleCount::Value(1),
-        Operation::ANDReg { m: _, dn: _ } => CycleCount::Value(1),
-        Operation::ASRImm { imm: _, m: _, d: _ } => CycleCount::Value(1),
-        Operation::ASRReg { m: _, dn: _ } => CycleCount::Value(1),
-        Operation::B { cond: _, imm: _ } => {
-            let max_cycle: fn(state: &GAState) -> usize = |state| {
-                if state.get_has_jumped() {
-                    3
-                } else {
-                    1
-                }
-            };
-            CycleCount::Function(max_cycle)
-        }
-        Operation::BICReg { m: _, dn: _ } => CycleCount::Value(1),
-        Operation::BKPT { imm: _ } => CycleCount::Value(0),
-        Operation::BL { imm: _ } => CycleCount::Value(4),
-        Operation::BLXReg { m: _ } => CycleCount::Value(3),
-        Operation::BX { m: _ } => CycleCount::Value(3),
-        Operation::CMNReg { m: _, n: _ } => CycleCount::Value(1),
-        Operation::CMPImm { n: _, imm: _ } => CycleCount::Value(1),
-        Operation::CMPReg { m: _, n: _ } => CycleCount::Value(1),
-        Operation::CPS { im: _ } => CycleCount::Value(1),
-        Operation::CPY => {
-            // this is not a real instruction is equvelatn to mov
-            unreachable!()
-        }
-        Operation::DMB { option: _ } => CycleCount::Value(4),
-        Operation::DSB { option: _ } => CycleCount::Value(4),
-        Operation::EORReg { m: _, dn: _ } => CycleCount::Value(1),
-        Operation::ISB { option: _ } => CycleCount::Value(4),
-        Operation::LDM { n: _, reg_list } => {
-            let max_cycle = 1 + reg_list.len();
-            CycleCount::Value(max_cycle)
-        }
-        Operation::LDRImm { imm: _, n: _, t: _ } => CycleCount::Value(2),
-        Operation::LDRLiteral { t: _, imm: _ } => CycleCount::Value(2),
-        Operation::LDRReg { m: _, n: _, t: _ } => CycleCount::Value(2),
-        Operation::LDRBImm { imm: _, n: _, t: _ } => CycleCount::Value(2),
-        Operation::LDRBReg { m: _, n: _, t: _ } => CycleCount::Value(2),
-        Operation::LDRHImm { imm: _, n: _, t: _ } => CycleCount::Value(2),
-        Operation::LDRHReg { m: _, n: _, t: _ } => CycleCount::Value(2),
-        Operation::LDRSBReg { m: _, n: _, t: _ } => CycleCount::Value(2),
-        Operation::LDRSH { m: _, n: _, t: _ } => CycleCount::Value(2),
-        Operation::LSLImm { imm: _, m: _, d: _ } => CycleCount::Value(1),
-        Operation::LSLReg { m: _, dn: _ } => CycleCount::Value(1),
-        Operation::LSRImm { imm: _, m: _, d: _ } => CycleCount::Value(1),
-        Operation::LSRReg { m: _, dn: _ } => CycleCount::Value(1),
-        Operation::MOVImm { d: _, imm: _ } => CycleCount::Value(1),
-        Operation::MOVReg {
-            m: _,
-            d,
-            set_flags: _,
-        } => {
-            let max_cycle = if *d == Register::PC { 3 } else { 1 };
-            CycleCount::Value(max_cycle)
-        }
-        Operation::MRS { d: _, sysm: _ } => CycleCount::Value(4),
-        Operation::MSRReg { n: _, sysm: _ } => CycleCount::Value(4),
-        Operation::MUL { n: _, dm: _ } => {
-            CycleCount::Value(32) // Can be one depending on core implementation might be able to read this from somewhere.
-        }
-        Operation::MVNReg { m: _, d: _ } => CycleCount::Value(1),
-        Operation::NOP => CycleCount::Value(1),
-        Operation::ORRReg { m: _, dn: _ } => CycleCount::Value(1),
-        Operation::POP { reg_list } => {
-            let max_cycle = if reg_list.contains(&Register::PC) {
-                4
-            } else {
-                1
-            } + reg_list.len();
-            CycleCount::Value(max_cycle)
-        }
-        Operation::PUSH { reg_list } => CycleCount::Value(1 + reg_list.len()),
-        Operation::REV { m: _, d: _ } => CycleCount::Value(1),
-        Operation::REV16 { m: _, d: _ } => CycleCount::Value(1),
-        Operation::REVSH { m: _, d: _ } => CycleCount::Value(1),
-        Operation::RORReg { m: _, dn: _ } => CycleCount::Value(1),
-        Operation::RSBImm { n: _, d: _ } => CycleCount::Value(1),
-        Operation::SBCReg { m: _, dn: _ } => CycleCount::Value(1),
-        Operation::SEV => CycleCount::Value(1),
-        Operation::STM { n: _, reg_list } => CycleCount::Value(1 + reg_list.len()),
-        Operation::STRImm { imm: _, n: _, t: _ } => CycleCount::Value(2),
-        Operation::STRReg { m: _, n: _, t: _ } => CycleCount::Value(2),
-        Operation::STRBImm { imm: _, n: _, t: _ } => CycleCount::Value(2),
-        Operation::STRBReg { m: _, n: _, t: _ } => CycleCount::Value(2),
-        Operation::STRHImm { imm: _, n: _, t: _ } => CycleCount::Value(2),
-        Operation::STRHReg { m: _, n: _, t: _ } => CycleCount::Value(2),
-        Operation::SUBImm { imm: _, n: _, d: _ } => CycleCount::Value(1),
-        Operation::SUBReg { m: _, n: _, d: _ } => CycleCount::Value(1),
-        Operation::SUBImmSP { imm: _ } => CycleCount::Value(1),
-        Operation::SVC { imm: _ } => CycleCount::Value(0),
-        Operation::SXTB { m: _, d: _ } => CycleCount::Value(1),
-        Operation::SXTH { m: _, d: _ } => CycleCount::Value(1),
-        Operation::TSTReg { m: _, n: _ } => CycleCount::Value(1),
-        Operation::UXTB { m: _, d: _ } => CycleCount::Value(1),
-        Operation::UXTH { m: _, d: _ } => CycleCount::Value(1),
-        Operation::WFE => todo!(),
-        Operation::WFI => todo!(),
-        Operation::YIELD => todo!(),
-        Operation::UDF { imm:_imm } => unimplemented!()
-    }
-}
-
-impl Translatable for Instruction {
-    fn translate(&self) -> GAInstruction {
-        let operations = match &self.operation {
+impl ArmV6M {
+    pub(super) fn expand(instr: Instruction) -> GAInstruction {
+        let operations = match &instr.operation {
             Operation::ADCReg { m, n, d } => {
-                let dest = arm_register_to_ga_operand(d);
-                let mreg = arm_register_to_ga_operand(m);
-                let nreg = arm_register_to_ga_operand(n);
+                let dest = arm_register_to_ga_operand(&d);
+                let mreg = arm_register_to_ga_operand(&m);
+                let nreg = arm_register_to_ga_operand(&n);
 
                 vec![
                     GAOperation::Adc {
@@ -315,9 +45,9 @@ impl Translatable for Instruction {
                 ]
             }
             Operation::ADDImm { imm, n, d } => {
-                let dest = arm_register_to_ga_operand(d);
+                let dest = arm_register_to_ga_operand(&d);
                 let imm = Operand::Immidiate(DataWord::Word32(*imm));
-                let nreg = arm_register_to_ga_operand(n);
+                let nreg = arm_register_to_ga_operand(&n);
                 let op_local = Operand::Local("op".to_owned());
 
                 vec![
@@ -347,9 +77,9 @@ impl Translatable for Instruction {
                 ]
             }
             Operation::ADDReg { m, n, d } => {
-                let dest = arm_register_to_ga_operand(d);
-                let mreg = arm_register_to_ga_operand(m);
-                let nreg = arm_register_to_ga_operand(n);
+                let dest = arm_register_to_ga_operand(&&d);
+                let mreg = arm_register_to_ga_operand(&&m);
+                let nreg = arm_register_to_ga_operand(&&n);
                 let m_local = Operand::Local("m".to_owned());
                 let n_local = Operand::Local("n".to_owned());
 
@@ -384,14 +114,14 @@ impl Translatable for Instruction {
                 ]
             }
             Operation::ADDImmSP { d, imm } => vec![GAOperation::Add {
-                destination: arm_register_to_ga_operand(d),
-                operand1: arm_register_to_ga_operand(&Register::SP),
+                destination: arm_register_to_ga_operand(&d),
+                operand1: arm_register_to_ga_operand(&&Register::SP),
                 operand2: Operand::Immidiate(DataWord::Word32(*imm)),
             }],
             Operation::ADDRegSP { d, m } => vec![GAOperation::Add {
-                destination: arm_register_to_ga_operand(d),
-                operand1: arm_register_to_ga_operand(&Register::SP),
-                operand2: arm_register_to_ga_operand(m),
+                destination: arm_register_to_ga_operand(&d),
+                operand1: arm_register_to_ga_operand(&&Register::SP),
+                operand2: arm_register_to_ga_operand(&m),
             }],
             Operation::ADR { d, imm } => {
                 let imm = imm;
@@ -407,7 +137,7 @@ impl Translatable for Instruction {
                         operand2: Operand::Immidiate(DataWord::Word32(!0b11)),
                     },
                     GAOperation::Add {
-                        destination: arm_register_to_ga_operand(d),
+                        destination: arm_register_to_ga_operand(&d),
                         operand1: Operand::Local("addr".to_owned()),
                         operand2: Operand::Immidiate(DataWord::Word32(*imm)),
                     },
@@ -415,33 +145,33 @@ impl Translatable for Instruction {
             }
             Operation::ANDReg { m, dn } => vec![
                 GAOperation::And {
-                    destination: arm_register_to_ga_operand(dn),
-                    operand1: arm_register_to_ga_operand(dn),
-                    operand2: arm_register_to_ga_operand(m),
+                    destination: arm_register_to_ga_operand(&dn),
+                    operand1: arm_register_to_ga_operand(&dn),
+                    operand2: arm_register_to_ga_operand(&m),
                 },
-                GAOperation::SetNFlag(arm_register_to_ga_operand(dn)),
-                GAOperation::SetZFlag(arm_register_to_ga_operand(dn)),
+                GAOperation::SetNFlag(arm_register_to_ga_operand(&dn)),
+                GAOperation::SetZFlag(arm_register_to_ga_operand(&dn)),
             ],
             Operation::ASRImm { imm, m, d } => vec![
                 GAOperation::Move {
                     destination: Operand::Local("m".to_owned()),
-                    source: arm_register_to_ga_operand(m),
+                    source: arm_register_to_ga_operand(&m),
                 },
                 GAOperation::Sra {
-                    destination: arm_register_to_ga_operand(d),
-                    operand: arm_register_to_ga_operand(m),
+                    destination: arm_register_to_ga_operand(&d),
+                    operand: arm_register_to_ga_operand(&m),
                     shift: Operand::Immidiate(DataWord::Word32(*imm)),
                 },
-                GAOperation::SetNFlag(arm_register_to_ga_operand(d)),
-                GAOperation::SetZFlag(arm_register_to_ga_operand(d)),
+                GAOperation::SetNFlag(arm_register_to_ga_operand(&d)),
+                GAOperation::SetZFlag(arm_register_to_ga_operand(&d)),
                 GAOperation::SetCFlagSra {
                     operand: Operand::Local("m".to_owned()),
                     shift: Operand::Immidiate(DataWord::Word32(*imm)),
                 },
             ],
             Operation::ASRReg { m, dn } => {
-                let dnreg = arm_register_to_ga_operand(dn);
-                let mreg = arm_register_to_ga_operand(m);
+                let dnreg = arm_register_to_ga_operand(&dn);
+                let mreg = arm_register_to_ga_operand(&m);
                 let n_local = Operand::Local("n".to_owned());
                 let shift_local = Operand::Local("shift".to_owned());
 
@@ -484,8 +214,8 @@ impl Translatable for Instruction {
                 ]
             }
             Operation::BICReg { m, dn } => {
-                let reg_m = arm_register_to_ga_operand(m);
-                let reg_dn = arm_register_to_ga_operand(dn);
+                let reg_m = arm_register_to_ga_operand(&m);
+                let reg_dn = arm_register_to_ga_operand(&dn);
 
                 vec![
                     GAOperation::Not {
@@ -521,16 +251,16 @@ impl Translatable for Instruction {
             ],
             Operation::BLXReg { m } => vec![
                 GAOperation::Move {
-                    destination: arm_register_to_ga_operand(&Register::LR),
+                    destination: arm_register_to_ga_operand(&&Register::LR),
                     source: Operand::Register("PC".to_owned()),
                 },
                 GAOperation::Move {
                     destination: Operand::Register("PC".to_owned()),
-                    source: arm_register_to_ga_operand(m),
+                    source: arm_register_to_ga_operand(&m),
                 },
             ],
             Operation::BX { m } => {
-                let reg = arm_register_to_ga_operand(m);
+                let reg = arm_register_to_ga_operand(&m);
                 let destination = Operand::Register("PC".to_owned());
                 vec![GAOperation::Move {
                     destination,
@@ -538,8 +268,8 @@ impl Translatable for Instruction {
                 }]
             }
             Operation::CMNReg { m, n } => {
-                let m = arm_register_to_ga_operand(m);
-                let n = arm_register_to_ga_operand(n);
+                let m = arm_register_to_ga_operand(&m);
+                let n = arm_register_to_ga_operand(&n);
                 vec![
                     GAOperation::Add {
                         destination: Operand::Local("result".to_owned()),
@@ -563,7 +293,7 @@ impl Translatable for Instruction {
                 ]
             }
             Operation::CMPImm { n, imm } => {
-                let op_n = arm_register_to_ga_operand(n);
+                let op_n = arm_register_to_ga_operand(&n);
                 let op_imm = Operand::Immidiate(DataWord::Word32(*imm));
                 vec![
                     GAOperation::Sub {
@@ -588,8 +318,8 @@ impl Translatable for Instruction {
                 ]
             }
             Operation::CMPReg { m, n } => {
-                let op_n = arm_register_to_ga_operand(n);
-                let op_m = arm_register_to_ga_operand(m);
+                let op_n = arm_register_to_ga_operand(&n);
+                let op_m = arm_register_to_ga_operand(&m);
                 vec![
                     GAOperation::Sub {
                         destination: Operand::Local("result".to_owned()),
@@ -630,12 +360,12 @@ impl Translatable for Instruction {
                 vec![]
             }
             Operation::EORReg { m, dn } => {
-                let dn = arm_register_to_ga_operand(dn);
+                let dn = arm_register_to_ga_operand(&dn);
                 vec![
                     GAOperation::Xor {
                         destination: dn.clone(),
                         operand1: dn.clone(),
-                        operand2: arm_register_to_ga_operand(m),
+                        operand2: arm_register_to_ga_operand(&m),
                     },
                     GAOperation::SetNFlag(dn.clone()),
                     GAOperation::SetZFlag(dn),
@@ -648,13 +378,13 @@ impl Translatable for Instruction {
             Operation::LDM { n, reg_list } => {
                 let mut operations: Vec<GAOperation> = vec![GAOperation::Move {
                     destination: Operand::Local("Address".to_owned()),
-                    source: arm_register_to_ga_operand(n),
+                    source: arm_register_to_ga_operand(&n),
                 }];
                 for reg in reg_list {
                     // write register to memory
                     operations.push(GAOperation::Move {
                         destination: Operand::AddressInLocal("Address".to_owned(), 32),
-                        source: arm_register_to_ga_operand(reg),
+                        source: arm_register_to_ga_operand(&reg),
                     });
                     // update address
                     operations.push(GAOperation::Add {
@@ -666,7 +396,7 @@ impl Translatable for Instruction {
                 if reg_list.contains(n) {
                     // addre reg not in reg list writeback
                     operations.push(GAOperation::Move {
-                        destination: arm_register_to_ga_operand(n),
+                        destination: arm_register_to_ga_operand(&n),
                         source: Operand::Local("Address".to_owned()),
                     });
                 }
@@ -675,7 +405,7 @@ impl Translatable for Instruction {
             Operation::LDRImm { imm, n, t } => vec![
                 GAOperation::Add {
                     destination: Operand::Local("addr".to_owned()),
-                    operand1: arm_register_to_ga_operand(n),
+                    operand1: arm_register_to_ga_operand(&n),
                     operand2: Operand::Immidiate(DataWord::Word32(*imm)),
                 },
                 GAOperation::Move {
@@ -683,7 +413,7 @@ impl Translatable for Instruction {
                     source: Operand::Local("addr".to_owned()),
                 },
                 GAOperation::Move {
-                    destination: arm_register_to_ga_operand(t),
+                    destination: arm_register_to_ga_operand(&t),
                     source: Operand::AddressInLocal("addr".to_owned(), 32),
                 },
             ],
@@ -708,29 +438,29 @@ impl Translatable for Instruction {
                     source: Operand::Local("addr".to_owned()),
                 },
                 GAOperation::Move {
-                    destination: arm_register_to_ga_operand(t),
+                    destination: arm_register_to_ga_operand(&t),
                     source: Operand::AddressInLocal("addr".to_owned(), 32),
                 },
             ],
             Operation::LDRReg { m, n, t } => vec![
                 GAOperation::Add {
                     destination: Operand::Local("addr".to_owned()),
-                    operand1: arm_register_to_ga_operand(n),
-                    operand2: arm_register_to_ga_operand(m),
+                    operand1: arm_register_to_ga_operand(&n),
+                    operand2: arm_register_to_ga_operand(&m),
                 },
                 GAOperation::Move {
                     destination: Operand::Register("LastAddr".to_owned()),
                     source: Operand::Local("addr".to_owned()),
                 },
                 GAOperation::Move {
-                    destination: arm_register_to_ga_operand(t),
+                    destination: arm_register_to_ga_operand(&t),
                     source: Operand::AddressInLocal("addr".to_owned(), 32),
                 },
             ],
             Operation::LDRBImm { imm, n, t } => vec![
                 GAOperation::Add {
                     destination: Operand::Local("addr".to_owned()),
-                    operand1: arm_register_to_ga_operand(n),
+                    operand1: arm_register_to_ga_operand(&n),
                     operand2: Operand::Immidiate(DataWord::Word32(*imm)),
                 },
                 GAOperation::Move {
@@ -738,39 +468,39 @@ impl Translatable for Instruction {
                     source: Operand::Local("addr".to_owned()),
                 },
                 GAOperation::Move {
-                    destination: arm_register_to_ga_operand(t),
+                    destination: arm_register_to_ga_operand(&t),
                     source: Operand::AddressInLocal("addr".to_owned(), 8),
                 },
                 GAOperation::ZeroExtend {
-                    destination: arm_register_to_ga_operand(t),
-                    operand: arm_register_to_ga_operand(t),
+                    destination: arm_register_to_ga_operand(&t),
+                    operand: arm_register_to_ga_operand(&t),
                     bits: 8,
                 },
             ],
             Operation::LDRBReg { m, n, t } => vec![
                 GAOperation::Add {
                     destination: Operand::Local("addr".to_owned()),
-                    operand1: arm_register_to_ga_operand(n),
-                    operand2: arm_register_to_ga_operand(m),
+                    operand1: arm_register_to_ga_operand(&n),
+                    operand2: arm_register_to_ga_operand(&m),
                 },
                 GAOperation::Move {
                     destination: Operand::Register("LastAddr".to_owned()),
                     source: Operand::Local("addr".to_owned()),
                 },
                 GAOperation::Move {
-                    destination: arm_register_to_ga_operand(t),
+                    destination: arm_register_to_ga_operand(&t),
                     source: Operand::AddressInLocal("addr".to_owned(), 8),
                 },
                 GAOperation::ZeroExtend {
-                    destination: arm_register_to_ga_operand(t),
-                    operand: arm_register_to_ga_operand(t),
+                    destination: arm_register_to_ga_operand(&t),
+                    operand: arm_register_to_ga_operand(&t),
                     bits: 8,
                 },
             ],
             Operation::LDRHImm { imm, n, t } => vec![
                 GAOperation::Add {
                     destination: Operand::Local("addr".to_owned()),
-                    operand1: arm_register_to_ga_operand(n),
+                    operand1: arm_register_to_ga_operand(&n),
                     operand2: Operand::Immidiate(DataWord::Word32(*imm)),
                 },
                 GAOperation::Move {
@@ -778,123 +508,123 @@ impl Translatable for Instruction {
                     source: Operand::Local("addr".to_owned()),
                 },
                 GAOperation::Move {
-                    destination: arm_register_to_ga_operand(t),
+                    destination: arm_register_to_ga_operand(&t),
                     source: Operand::AddressInLocal("addr".to_owned(), 16),
                 },
                 GAOperation::ZeroExtend {
-                    destination: arm_register_to_ga_operand(t),
-                    operand: arm_register_to_ga_operand(t),
+                    destination: arm_register_to_ga_operand(&t),
+                    operand: arm_register_to_ga_operand(&t),
                     bits: 16,
                 },
             ],
             Operation::LDRHReg { m, n, t } => vec![
                 GAOperation::Add {
                     destination: Operand::Local("addr".to_owned()),
-                    operand1: arm_register_to_ga_operand(n),
-                    operand2: arm_register_to_ga_operand(m),
+                    operand1: arm_register_to_ga_operand(&n),
+                    operand2: arm_register_to_ga_operand(&m),
                 },
                 GAOperation::Move {
                     destination: Operand::Register("LastAddr".to_owned()),
                     source: Operand::Local("addr".to_owned()),
                 },
                 GAOperation::Move {
-                    destination: arm_register_to_ga_operand(t),
+                    destination: arm_register_to_ga_operand(&t),
                     source: Operand::AddressInLocal("addr".to_owned(), 16),
                 },
                 GAOperation::ZeroExtend {
-                    destination: arm_register_to_ga_operand(t),
-                    operand: arm_register_to_ga_operand(t),
+                    destination: arm_register_to_ga_operand(&t),
+                    operand: arm_register_to_ga_operand(&t),
                     bits: 16,
                 },
             ],
             Operation::LDRSBReg { m, n, t } => vec![
                 GAOperation::Add {
                     destination: Operand::Local("addr".to_owned()),
-                    operand1: arm_register_to_ga_operand(n),
-                    operand2: arm_register_to_ga_operand(m),
+                    operand1: arm_register_to_ga_operand(&n),
+                    operand2: arm_register_to_ga_operand(&m),
                 },
                 GAOperation::Move {
                     destination: Operand::Register("LastAddr".to_owned()),
                     source: Operand::Local("addr".to_owned()),
                 },
                 GAOperation::Move {
-                    destination: arm_register_to_ga_operand(t),
+                    destination: arm_register_to_ga_operand(&t),
                     source: Operand::AddressInLocal("addr".to_owned(), 8),
                 },
                 GAOperation::SignExtend {
-                    destination: arm_register_to_ga_operand(t),
-                    operand: arm_register_to_ga_operand(t),
+                    destination: arm_register_to_ga_operand(&t),
+                    operand: arm_register_to_ga_operand(&t),
                     bits: 8,
                 },
             ],
             Operation::LDRSH { m, n, t } => vec![
                 GAOperation::Add {
                     destination: Operand::Local("addr".to_owned()),
-                    operand1: arm_register_to_ga_operand(n),
-                    operand2: arm_register_to_ga_operand(m),
+                    operand1: arm_register_to_ga_operand(&n),
+                    operand2: arm_register_to_ga_operand(&m),
                 },
                 GAOperation::Move {
                     destination: Operand::Register("LastAddr".to_owned()),
                     source: Operand::Local("addr".to_owned()),
                 },
                 GAOperation::Move {
-                    destination: arm_register_to_ga_operand(t),
+                    destination: arm_register_to_ga_operand(&t),
                     source: Operand::AddressInLocal("addr".to_owned(), 16),
                 },
                 GAOperation::SignExtend {
-                    destination: arm_register_to_ga_operand(t),
-                    operand: arm_register_to_ga_operand(t),
+                    destination: arm_register_to_ga_operand(&t),
+                    operand: arm_register_to_ga_operand(&t),
                     bits: 8,
                 },
             ],
             Operation::LSLImm { imm, m, d } => vec![
                 GAOperation::Sl {
-                    destination: arm_register_to_ga_operand(d),
-                    operand: arm_register_to_ga_operand(m),
+                    destination: arm_register_to_ga_operand(&d),
+                    operand: arm_register_to_ga_operand(&m),
                     shift: Operand::Immidiate(DataWord::Word32(*imm)),
                 },
-                GAOperation::SetNFlag(arm_register_to_ga_operand(d)),
-                GAOperation::SetZFlag(arm_register_to_ga_operand(d)),
+                GAOperation::SetNFlag(arm_register_to_ga_operand(&d)),
+                GAOperation::SetZFlag(arm_register_to_ga_operand(&d)),
             ],
             Operation::LSLReg { m, dn } => vec![
                 GAOperation::And {
                     destination: Operand::Local("shift".to_owned()),
-                    operand1: arm_register_to_ga_operand(m),
+                    operand1: arm_register_to_ga_operand(&m),
                     operand2: Operand::Immidiate(DataWord::Word32(0xff)),
                 },
                 GAOperation::Sl {
-                    destination: arm_register_to_ga_operand(dn),
-                    operand: arm_register_to_ga_operand(dn),
+                    destination: arm_register_to_ga_operand(&dn),
+                    operand: arm_register_to_ga_operand(&dn),
                     shift: Operand::Local("shift".to_owned()),
                 },
-                GAOperation::SetNFlag(arm_register_to_ga_operand(dn)),
-                GAOperation::SetZFlag(arm_register_to_ga_operand(dn)),
+                GAOperation::SetNFlag(arm_register_to_ga_operand(&dn)),
+                GAOperation::SetZFlag(arm_register_to_ga_operand(&dn)),
             ],
             Operation::LSRImm { imm, m, d } => vec![
                 GAOperation::Srl {
-                    destination: arm_register_to_ga_operand(d),
-                    operand: arm_register_to_ga_operand(m),
+                    destination: arm_register_to_ga_operand(&d),
+                    operand: arm_register_to_ga_operand(&m),
                     shift: Operand::Immidiate(DataWord::Word32(*imm)),
                 },
-                GAOperation::SetNFlag(arm_register_to_ga_operand(d)),
-                GAOperation::SetZFlag(arm_register_to_ga_operand(d)),
+                GAOperation::SetNFlag(arm_register_to_ga_operand(&d)),
+                GAOperation::SetZFlag(arm_register_to_ga_operand(&d)),
             ],
             Operation::LSRReg { m, dn } => vec![
                 GAOperation::And {
                     destination: Operand::Local("shift".to_owned()),
-                    operand1: arm_register_to_ga_operand(m),
+                    operand1: arm_register_to_ga_operand(&m),
                     operand2: Operand::Immidiate(DataWord::Word32(0xff)),
                 },
                 GAOperation::Srl {
-                    destination: arm_register_to_ga_operand(dn),
-                    operand: arm_register_to_ga_operand(dn),
+                    destination: arm_register_to_ga_operand(&dn),
+                    operand: arm_register_to_ga_operand(&dn),
                     shift: Operand::Local("shift".to_owned()),
                 },
-                GAOperation::SetNFlag(arm_register_to_ga_operand(dn)),
-                GAOperation::SetZFlag(arm_register_to_ga_operand(dn)),
+                GAOperation::SetNFlag(arm_register_to_ga_operand(&dn)),
+                GAOperation::SetZFlag(arm_register_to_ga_operand(&dn)),
             ],
             Operation::MOVImm { d, imm } => {
-                let destination = arm_register_to_ga_operand(d);
+                let destination = arm_register_to_ga_operand(&d);
                 let source = Operand::Immidiate(DataWord::Word32(*imm));
 
                 vec![
@@ -907,8 +637,8 @@ impl Translatable for Instruction {
                 ]
             }
             Operation::MOVReg { m, d, set_flags } => {
-                let destination = arm_register_to_ga_operand(d);
-                let source = arm_register_to_ga_operand(m);
+                let destination = arm_register_to_ga_operand(&d);
+                let source = arm_register_to_ga_operand(&m);
                 let mut operations = vec![GAOperation::Move {
                     destination: destination.clone(),
                     source: source.clone(),
@@ -921,16 +651,16 @@ impl Translatable for Instruction {
                 operations
             }
             Operation::MRS { d, sysm } => vec![GAOperation::Move {
-                destination: arm_register_to_ga_operand(d),
+                destination: arm_register_to_ga_operand(&d),
                 source: arm_special_register_to_operand(sysm),
             }],
             Operation::MSRReg { n, sysm } => vec![GAOperation::Move {
-                source: arm_register_to_ga_operand(n),
+                source: arm_register_to_ga_operand(&n),
                 destination: arm_special_register_to_operand(sysm),
             }],
             Operation::MUL { n, dm } => {
-                let n = arm_register_to_ga_operand(n);
-                let dm = arm_register_to_ga_operand(dm);
+                let n = arm_register_to_ga_operand(&n);
+                let dm = arm_register_to_ga_operand(&dm);
 
                 vec![
                     GAOperation::Mul {
@@ -943,8 +673,8 @@ impl Translatable for Instruction {
                 ]
             }
             Operation::MVNReg { m, d } => {
-                let m = arm_register_to_ga_operand(m);
-                let d = arm_register_to_ga_operand(d);
+                let m = arm_register_to_ga_operand(&m);
+                let d = arm_register_to_ga_operand(&d);
 
                 vec![
                     GAOperation::Not {
@@ -957,8 +687,8 @@ impl Translatable for Instruction {
             }
             Operation::NOP => vec![],
             Operation::ORRReg { m, dn } => {
-                let m = arm_register_to_ga_operand(m);
-                let dn = arm_register_to_ga_operand(dn);
+                let m = arm_register_to_ga_operand(&m);
+                let dn = arm_register_to_ga_operand(&dn);
 
                 vec![
                     GAOperation::Or {
@@ -981,7 +711,7 @@ impl Translatable for Instruction {
                     // write register to memory
                     operations.push(GAOperation::Move {
                         source: Operand::AddressInLocal("Address".to_owned(), 32),
-                        destination: arm_register_to_ga_operand(reg),
+                        destination: arm_register_to_ga_operand(&reg),
                     });
                     // update address
                     operations.push(GAOperation::Add {
@@ -1011,7 +741,7 @@ impl Translatable for Instruction {
                     // write register to memory
                     operations.push(GAOperation::Move {
                         destination: Operand::AddressInLocal("Address".to_owned(), 32),
-                        source: arm_register_to_ga_operand(reg),
+                        source: arm_register_to_ga_operand(&reg),
                     });
                     // update address
                     operations.push(GAOperation::Add {
@@ -1030,8 +760,8 @@ impl Translatable for Instruction {
                 operations
             }
             Operation::REV { m, d } => {
-                let m = arm_register_to_ga_operand(m);
-                let d = arm_register_to_ga_operand(d);
+                let m = arm_register_to_ga_operand(&m);
+                let d = arm_register_to_ga_operand(&d);
                 let b1 = Operand::Local("b1".to_owned());
                 let b2 = Operand::Local("B2".to_owned());
                 let b3 = Operand::Local("B3".to_owned());
@@ -1114,8 +844,8 @@ impl Translatable for Instruction {
                 ]
             }
             Operation::REV16 { m, d } => {
-                let m = arm_register_to_ga_operand(m);
-                let d = arm_register_to_ga_operand(d);
+                let m = arm_register_to_ga_operand(&m);
+                let d = arm_register_to_ga_operand(&d);
                 let b1 = Operand::Local("b1".to_owned());
                 let b2 = Operand::Local("B2".to_owned());
                 let b3 = Operand::Local("B3".to_owned());
@@ -1198,8 +928,8 @@ impl Translatable for Instruction {
                 ]
             }
             Operation::REVSH { m, d } => {
-                let m = arm_register_to_ga_operand(m);
-                let d = arm_register_to_ga_operand(d);
+                let m = arm_register_to_ga_operand(&m);
+                let d = arm_register_to_ga_operand(&d);
                 let b1 = Operand::Local("b1".to_owned());
                 let b2 = Operand::Local("B2".to_owned());
 
@@ -1254,8 +984,8 @@ impl Translatable for Instruction {
                 ]
             }
             Operation::RORReg { m, dn } => {
-                let m = arm_register_to_ga_operand(m);
-                let dn = arm_register_to_ga_operand(dn);
+                let m = arm_register_to_ga_operand(&m);
+                let dn = arm_register_to_ga_operand(&dn);
                 let shift = Operand::Local("shift".to_owned());
                 let mask = Operand::Immidiate(DataWord::Word32(0xff));
                 vec![
@@ -1275,8 +1005,8 @@ impl Translatable for Instruction {
                 ]
             }
             Operation::RSBImm { n, d } => {
-                let n = arm_register_to_ga_operand(n);
-                let d = arm_register_to_ga_operand(d);
+                let n = arm_register_to_ga_operand(&n);
+                let d = arm_register_to_ga_operand(&d);
                 let local_n = Operand::Local("n".to_owned());
                 let zero = Operand::Immidiate(DataWord::Word32(0));
 
@@ -1307,8 +1037,8 @@ impl Translatable for Instruction {
                 ]
             }
             Operation::SBCReg { m, dn } => {
-                let m = arm_register_to_ga_operand(m);
-                let dn = arm_register_to_ga_operand(dn);
+                let m = arm_register_to_ga_operand(&m);
+                let dn = arm_register_to_ga_operand(&dn);
                 let not_m = Operand::Local("not_m".to_owned());
                 let local_n = Operand::Local("n".to_owned());
 
@@ -1347,7 +1077,7 @@ impl Translatable for Instruction {
                 vec![]
             }
             Operation::STM { n, reg_list } => {
-                let n = arm_register_to_ga_operand(n);
+                let n = arm_register_to_ga_operand(&n);
                 let addr = Operand::Local("addr".to_owned());
                 let to_addr = Operand::AddressInLocal("addr".to_owned(), 32);
                 let four = Operand::Immidiate(DataWord::Word32(4));
@@ -1357,7 +1087,7 @@ impl Translatable for Instruction {
                 }];
 
                 for reg in reg_list {
-                    let reg = arm_register_to_ga_operand(reg);
+                    let reg = arm_register_to_ga_operand(&reg);
                     operations.push(GAOperation::Move {
                         destination: to_addr.clone(),
                         source: reg,
@@ -1378,8 +1108,8 @@ impl Translatable for Instruction {
             }
             Operation::STRImm { imm, n, t } => {
                 let imm = Operand::Immidiate(DataWord::Word32(*imm));
-                let n = arm_register_to_ga_operand(n);
-                let t = arm_register_to_ga_operand(t);
+                let n = arm_register_to_ga_operand(&n);
+                let t = arm_register_to_ga_operand(&t);
                 let addr = Operand::Local("addr".to_owned());
                 let to_addr = Operand::AddressInLocal("addr".to_owned(), 32);
 
@@ -1400,9 +1130,9 @@ impl Translatable for Instruction {
                 ]
             }
             Operation::STRReg { m, n, t } => {
-                let m = arm_register_to_ga_operand(m);
-                let n = arm_register_to_ga_operand(n);
-                let t = arm_register_to_ga_operand(t);
+                let m = arm_register_to_ga_operand(&m);
+                let n = arm_register_to_ga_operand(&n);
+                let t = arm_register_to_ga_operand(&t);
                 let addr = Operand::Local("addr".to_owned());
                 let to_addr = Operand::AddressInLocal("addr".to_owned(), 32);
 
@@ -1424,8 +1154,8 @@ impl Translatable for Instruction {
             }
             Operation::STRBImm { imm, n, t } => {
                 let imm = Operand::Immidiate(DataWord::Word32(*imm));
-                let n = arm_register_to_ga_operand(n);
-                let t = arm_register_to_ga_operand(t);
+                let n = arm_register_to_ga_operand(&n);
+                let t = arm_register_to_ga_operand(&t);
                 let addr = Operand::Local("addr".to_owned());
                 let to_addr = Operand::AddressInLocal("addr".to_owned(), 8);
 
@@ -1446,9 +1176,9 @@ impl Translatable for Instruction {
                 ]
             }
             Operation::STRBReg { m, n, t } => {
-                let m = arm_register_to_ga_operand(m);
-                let n = arm_register_to_ga_operand(n);
-                let t = arm_register_to_ga_operand(t);
+                let m = arm_register_to_ga_operand(&m);
+                let n = arm_register_to_ga_operand(&n);
+                let t = arm_register_to_ga_operand(&t);
                 let addr = Operand::Local("addr".to_owned());
                 let to_addr = Operand::AddressInLocal("addr".to_owned(), 8);
 
@@ -1470,8 +1200,8 @@ impl Translatable for Instruction {
             }
             Operation::STRHImm { imm, n, t } => {
                 let imm = Operand::Immidiate(DataWord::Word32(*imm));
-                let n = arm_register_to_ga_operand(n);
-                let t = arm_register_to_ga_operand(t);
+                let n = arm_register_to_ga_operand(&n);
+                let t = arm_register_to_ga_operand(&t);
                 let addr = Operand::Local("addr".to_owned());
                 let to_addr = Operand::AddressInLocal("addr".to_owned(), 16);
 
@@ -1492,9 +1222,9 @@ impl Translatable for Instruction {
                 ]
             }
             Operation::STRHReg { m, n, t } => {
-                let m = arm_register_to_ga_operand(m);
-                let n = arm_register_to_ga_operand(n);
-                let t = arm_register_to_ga_operand(t);
+                let m = arm_register_to_ga_operand(&m);
+                let n = arm_register_to_ga_operand(&n);
+                let t = arm_register_to_ga_operand(&t);
                 let addr = Operand::Local("addr".to_owned());
                 let to_addr = Operand::AddressInLocal("addr".to_owned(), 16);
 
@@ -1516,8 +1246,8 @@ impl Translatable for Instruction {
             }
             Operation::SUBImm { imm, n, d } => {
                 let imm = Operand::Immidiate(DataWord::Word32(*imm));
-                let n = arm_register_to_ga_operand(n);
-                let d = arm_register_to_ga_operand(d);
+                let n = arm_register_to_ga_operand(&n);
+                let d = arm_register_to_ga_operand(&d);
                 let local_n = Operand::Local("n".to_owned());
 
                 vec![
@@ -1547,9 +1277,9 @@ impl Translatable for Instruction {
                 ]
             }
             Operation::SUBReg { m, n, d } => {
-                let m = arm_register_to_ga_operand(m);
-                let n = arm_register_to_ga_operand(n);
-                let d = arm_register_to_ga_operand(d);
+                let m = arm_register_to_ga_operand(&m);
+                let n = arm_register_to_ga_operand(&n);
+                let d = arm_register_to_ga_operand(&d);
                 let local_n = Operand::Local("n".to_owned());
 
                 vec![
@@ -1589,8 +1319,8 @@ impl Translatable for Instruction {
                 vec![]
             }
             Operation::SXTB { m, d } => {
-                let m = arm_register_to_ga_operand(m);
-                let d = arm_register_to_ga_operand(d);
+                let m = arm_register_to_ga_operand(&m);
+                let d = arm_register_to_ga_operand(&d);
 
                 vec![GAOperation::SignExtend {
                     destination: d,
@@ -1599,8 +1329,8 @@ impl Translatable for Instruction {
                 }]
             }
             Operation::SXTH { m, d } => {
-                let m = arm_register_to_ga_operand(m);
-                let d = arm_register_to_ga_operand(d);
+                let m = arm_register_to_ga_operand(&m);
+                let d = arm_register_to_ga_operand(&d);
 
                 vec![GAOperation::SignExtend {
                     destination: d,
@@ -1609,8 +1339,8 @@ impl Translatable for Instruction {
                 }]
             }
             Operation::TSTReg { m, n } => {
-                let m = arm_register_to_ga_operand(m);
-                let n = arm_register_to_ga_operand(n);
+                let m = arm_register_to_ga_operand(&m);
+                let n = arm_register_to_ga_operand(&n);
                 let result = Operand::Local("result".to_owned());
 
                 vec![
@@ -1624,81 +1354,33 @@ impl Translatable for Instruction {
                 ]
             }
             Operation::UXTB { m, d } => vec![GAOperation::ZeroExtend {
-                destination: arm_register_to_ga_operand(d),
-                operand: arm_register_to_ga_operand(m),
+                destination: arm_register_to_ga_operand(&d),
+                operand: arm_register_to_ga_operand(&m),
                 bits: 8,
             }],
             Operation::UXTH { m, d } => vec![GAOperation::ZeroExtend {
-                destination: arm_register_to_ga_operand(d),
-                operand: arm_register_to_ga_operand(m),
+                destination: arm_register_to_ga_operand(&d),
+                operand: arm_register_to_ga_operand(&m),
                 bits: 16,
             }],
             Operation::WFE => todo!(),
             Operation::WFI => todo!(),
             Operation::YIELD => todo!(),
-            Operation::UDF { imm:_imm } => unimplemented!()
+            Operation::UDF { imm: _imm } => unimplemented!(),
         };
 
-        let instruction_width = match self.width {
+        let instruction_width = match instr.width {
             armv6_m_instruction_parser::instructons::InstructionWidth::Bit32 => 32,
             armv6_m_instruction_parser::instructons::InstructionWidth::Bit16 => 16,
         };
 
-        let max_cycle_count = cycle_count_m0plus_core(&self.operation);
+        let max_cycle_count = super::timing::cycle_count_m0plus_core(&instr.operation);
 
         GAInstruction {
             instruction_size: instruction_width,
             operations: operations,
             max_cycle: max_cycle_count,
         }
-    }
-
-    fn add_hooks(cfg: &mut RunConfig) {
-        let symbolic_sized = |state: &mut GAState| {
-            let value_ptr = state.get_register("R0".to_owned())?;
-            let size = state.get_register("R1".to_owned())?.get_constant().unwrap() * 8;
-            trace!(
-                "trying to create symbolic: addr: {:?}, size: {}",
-                value_ptr,
-                size
-            );
-            let name = "any".to_owned() + &state.marked_symbolic.len().to_string();
-            let symb_value = state.ctx.unconstrained(size as u32, &name);
-            state.marked_symbolic.push(Variable {
-                name: Some(name),
-                value: symb_value.clone(),
-                ty: ExpressionType::Integer(size as usize),
-            });
-            state.memory.write(&value_ptr, symb_value)?;
-
-            let lr = state.get_register("LR".to_owned())?;
-            state.set_register("PC".to_owned(), lr)?;
-            Ok(())
-        };
-
-        cfg.pc_hooks.push((
-            Regex::new(r"^symbolic_size<.+>$").unwrap(),
-            PCHook::Intrinsic(symbolic_sized),
-        ));
-
-        let read_pc: RegisterReadHook = |state| {
-            let two = state.ctx.from_u64(1, 32);
-            let pc = state.get_register("PC".to_owned()).unwrap();
-            Ok(pc.add(&two))
-        };
-
-        let write_pc: RegisterWriteHook = |state, value| state.set_register("PC".to_owned(), value);
-
-        cfg.register_read_hooks.push(("PC+".to_owned(), read_pc));
-        cfg.register_write_hooks.push(("PC+".to_owned(), write_pc));
-
-        // reset allways done
-        let read_reset_done: MemoryReadHook = |state, _addr| {
-            let value = state.ctx.from_u64(0xffff_ffff, 32);
-            Ok(value)
-        };
-        cfg.memory_read_hooks
-            .push((MemoryHookAddress::Single(0x4000c008), read_reset_done));
     }
 }
 
