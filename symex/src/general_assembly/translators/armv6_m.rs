@@ -160,19 +160,12 @@ fn cycle_count_m0plus_core(operation: &Operation) -> CycleCount {
         Operation::SXTB { m: _, d: _ } => CycleCount::Value(1),
         Operation::SXTH { m: _, d: _ } => CycleCount::Value(1),
         Operation::TSTReg { m: _, n: _ } => CycleCount::Value(1),
-        Operation::UDFT1 { imm: _ } => {
-            // generates a undefined exeption just panic for now
-            unimplemented!()
-        }
-        Operation::UDFT2 { imm: _ } => {
-            // generates a undefined exeption just panic for now
-            unimplemented!()
-        }
         Operation::UXTB { m: _, d: _ } => CycleCount::Value(1),
         Operation::UXTH { m: _, d: _ } => CycleCount::Value(1),
         Operation::WFE => todo!(),
         Operation::WFI => todo!(),
         Operation::YIELD => todo!(),
+        Operation::UDF { imm:_imm } => unimplemented!()
     }
 }
 
@@ -282,19 +275,12 @@ fn cycle_count_m0_core(operation: &Operation) -> CycleCount {
         Operation::SXTB { m: _, d: _ } => CycleCount::Value(1),
         Operation::SXTH { m: _, d: _ } => CycleCount::Value(1),
         Operation::TSTReg { m: _, n: _ } => CycleCount::Value(1),
-        Operation::UDFT1 { imm: _ } => {
-            // generates a undefined exeption just panic for now
-            unimplemented!()
-        }
-        Operation::UDFT2 { imm: _ } => {
-            // generates a undefined exeption just panic for now
-            unimplemented!()
-        }
         Operation::UXTB { m: _, d: _ } => CycleCount::Value(1),
         Operation::UXTH { m: _, d: _ } => CycleCount::Value(1),
         Operation::WFE => todo!(),
         Operation::WFI => todo!(),
         Operation::YIELD => todo!(),
+        Operation::UDF { imm:_imm } => unimplemented!()
     }
 }
 
@@ -1637,14 +1623,6 @@ impl Translatable for Instruction {
                     GAOperation::SetZFlag(result),
                 ]
             }
-            Operation::UDFT1 { imm: _ } => {
-                // generates a undefined exeption just panic for now
-                unimplemented!()
-            }
-            Operation::UDFT2 { imm: _ } => {
-                // generates a undefined exeption just panic for now
-                unimplemented!()
-            }
             Operation::UXTB { m, d } => vec![GAOperation::ZeroExtend {
                 destination: arm_register_to_ga_operand(d),
                 operand: arm_register_to_ga_operand(m),
@@ -1658,6 +1636,7 @@ impl Translatable for Instruction {
             Operation::WFE => todo!(),
             Operation::WFI => todo!(),
             Operation::YIELD => todo!(),
+            Operation::UDF { imm:_imm } => unimplemented!()
         };
 
         let instruction_width = match self.width {

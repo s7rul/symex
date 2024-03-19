@@ -367,7 +367,7 @@ impl<'vm> GAExecutor<'vm> {
             let mut local: HashMap<String, DExpr> = HashMap::new();
             for (n, operation) in i.operations.iter().enumerate() {
                 self.current_operation_index = n;
-                self.executer_operation(operation, &mut local)?;
+                self.execute_operation(operation, &mut local)?;
             }
         }
 
@@ -1480,7 +1480,7 @@ mod test {
             GAExecutor::from_state(vm.paths.get_path().unwrap().state, &mut vm, project);
         let imm_0 = Operand::Immidiate(DataWord::Word32(0));
         let imm_1 = Operand::Immidiate(DataWord::Word32(1));
-        let mut local = HashMap::new();
+        let local = HashMap::new();
         let r0 = Operand::Register("R0".to_owned());
 
         let program1 = vec![
