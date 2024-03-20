@@ -7,10 +7,13 @@ use armv6_m_instruction_parser::{
     registers::{Register, SpecialRegister},
 };
 
-use crate::general_assembly::{
-    instruction::{Condition, Instruction as GAInstruction, Operand, Operation as GAOperation},
-    DataWord,
+use general_assembly::{
+    condition::Condition,
+    operand::{DataWord, Operand},
+    operation::Operation as GAOperation,
 };
+
+use crate::general_assembly::instruction::Instruction as GAInstruction;
 
 use super::ArmV6M;
 

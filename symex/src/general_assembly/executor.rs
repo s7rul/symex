@@ -9,12 +9,18 @@ use crate::{
     smt::{smt_boolector::BoolectorSolverContext, DExpr, SolverError},
 };
 
+use general_assembly::{
+    operand::{DataWord, Operand},
+    operation::Operation,
+    shift::Shift,
+};
+
 use super::{
-    instruction::{Instruction, Operand, Operation},
+    instruction::Instruction,
     project::Project,
     state::{ContinueInsideInstruction, GAState},
     vm::VM,
-    DataWord, Result,
+    Result,
 };
 
 pub struct GAExecutor<'vm> {
@@ -208,6 +214,13 @@ impl<'vm> GAExecutor<'vm> {
                 let address = self.resolve_address(address, &local)?;
                 self.get_memory(address, *width)
             }
+            Operand::Flag(f) => {
+                let value = self.state.get_flag(f.clone());
+                match value {
+                    Some(value) => Ok(value.resize_unsigned(self.project.get_word_size())),
+                    None => todo!(),
+                }
+            }
         }
     }
 
@@ -243,6 +256,12 @@ impl<'vm> GAExecutor<'vm> {
             Operand::Local(k) => {
                 local.insert(k.to_owned(), value);
             }
+            Operand::Flag(f) => {
+                // TODO!
+                //
+                // Might be a good thing to throw an error here if the value is not 0 or 1.
+                self.state.set_flag(f.clone(), value.resize_unsigned(1));
+            }
         }
         Ok(())
     }
@@ -261,7 +280,8 @@ impl<'vm> GAExecutor<'vm> {
 
                 if addresses.len() == 1 {
                     return Ok(addresses[0].get_constant().unwrap());
-                } else if addresses.len() == 0 {
+                }
+                if addresses.len() == 0 {
                     return Err(SolverError::Unsat.into());
                 }
 
@@ -420,6 +440,26 @@ impl<'vm> GAExecutor<'vm> {
                 let result = op1.mul(&op2);
                 self.set_operand_value(destination, result, local)?;
             }
+            Operation::UDiv {
+                destination,
+                operand1,
+                operand2,
+            } => {
+                let op1 = self.get_operand_value(operand1, &local)?;
+                let op2 = self.get_operand_value(operand2, &local)?;
+                let result = op1.udiv(&op2);
+                self.set_operand_value(destination, result, local)?;
+            }
+            Operation::SDiv {
+                destination,
+                operand1,
+                operand2,
+            } => {
+                let op1 = self.get_operand_value(operand1, &local)?;
+                let op2 = self.get_operand_value(operand2, &local)?;
+                let result = op1.sdiv(&op2);
+                self.set_operand_value(destination, result, local)?;
+            }
             Operation::And {
                 destination,
                 operand1,
@@ -457,6 +497,43 @@ impl<'vm> GAExecutor<'vm> {
                 let op = self.get_operand_value(operand, local)?;
 
                 let result = op.not();
+                self.set_operand_value(destination, result, local)?;
+            }
+            Operation::Shift {
+                destination,
+                operand,
+                shift_n,
+                shift_t,
+            } => {
+                let value = self.get_operand_value(operand, &local)?;
+                let shift_amount = self.get_operand_value(shift_n, &local)?;
+                let result = match shift_t {
+                    Shift::Lsl => value.sll(&shift_amount),
+                    Shift::Lsr => value.srl(&shift_amount),
+                    Shift::Asr => value.sra(&shift_amount),
+                    Shift::Rrx => {
+                        let ret = value
+                            .and(&shift_amount.sub(&self.state.ctx.from_u64(1, 32)))
+                            .srl(&self.state.ctx.from_u64(1, 32))
+                            .simplify();
+                        let ret = ret.or(&self
+                            .state
+                            // Set the carry bit right above the last bit
+                            .get_flag("C".to_owned())
+                            .unwrap()
+                            .sll(&shift_amount.add(&self.state.ctx.from_u64(1, 32))));
+                        ret
+                    }
+                    Shift::Ror => {
+                        let word_size = self.state.ctx.from_u64(
+                            self.project.get_word_size() as u64,
+                            self.project.get_word_size(),
+                        );
+                        value
+                            .srl(&shift_amount)
+                            .or(&value.srl(&word_size).sub(&shift_amount))
+                    }
+                };
                 self.set_operand_value(destination, result, local)?;
             }
             Operation::Sl {
@@ -683,6 +760,15 @@ impl<'vm> GAExecutor<'vm> {
                 let result = valid_bits.sign_ext(self.project.get_word_size());
                 self.set_operand_value(destination, result, local)?;
             }
+            Operation::Resize {
+                destination,
+                operand,
+                bits,
+            } => {
+                let op = self.get_operand_value(operand, &local)?;
+                let result = op.resize_unsigned(*bits);
+                self.set_operand_value(destination, result, local)?;
+            }
             Operation::Adc {
                 destination,
                 operand1,
@@ -866,9 +952,9 @@ mod test {
 
     use crate::{
         general_assembly::{
-            arch::{arm::v6::ArmV6M, Arch},
+            arch::arm::v6::ArmV6M,
             executor::{add_with_carry, count_leading_zeroes, GAExecutor},
-            instruction::{Condition, CycleCount, Instruction, Operand, Operation},
+            instruction::{CycleCount, Instruction},
             project::Project,
             state::GAState,
             vm::VM,
@@ -876,6 +962,8 @@ mod test {
         },
         smt::{DContext, DSolver},
     };
+
+    use general_assembly::{condition::Condition, operand::Operand, operation::Operation};
 
     use super::{count_leading_ones, count_ones, count_zeroes};
 
@@ -1026,7 +1114,7 @@ mod test {
             0,
             WordSize::Bit32,
             Endianness::Little,
-            ArmV6M{},
+            ArmV6M {},
             HashMap::new(),
             HashMap::new(),
             HashMap::new(),

@@ -14,10 +14,9 @@ use crate::{
     smt::{DContext, DExpr, DSolver},
 };
 
-use super::{
-    instruction::{Condition, Instruction},
-    project::Project,
-};
+use super::{instruction::Instruction, project::Project};
+
+use general_assembly::condition::Condition;
 
 pub enum HookOrInstruction {
     PcHook(PCHook),
