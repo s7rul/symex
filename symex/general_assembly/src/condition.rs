@@ -1,5 +1,7 @@
-//! Defines all condition codes that are valid for [`GeneralAssembly`]
+//! Defines the [`Condition`] codes used in Symex General Assembly.
+
 #[derive(Debug, PartialEq, Clone, Copy)]
+/// Enumerates the condition codes used in Symex General Assembly.
 pub enum Condition {
     /// Equal Z = 1
     EQ,

@@ -1,6 +1,9 @@
-//! Defines all types of operands that are valid in [`GeneralAssembly`]
+//! Defines all types of operands that are valid in [Symex](../../../) General
+//! Assembly.
 
 #[derive(Debug, Clone, Copy)]
+/// [Symex](../../../) representation for immediate fields.
+#[allow(missing_docs)]
 pub enum DataWord {
     Word64(u64),
     Word32(u32),
@@ -9,14 +12,11 @@ pub enum DataWord {
 }
 
 #[derive(Debug, Clone, Copy)]
-pub enum RawDataWord {
-    Word64([u8; 8]),
-    Word32([u8; 4]),
-    Word16([u8; 2]),
-    Word8([u8; 1]),
-}
-
-#[derive(Debug, Clone, Copy)]
+/// Symex representation of a halfword immediate field.
+///
+/// These immediate fields occupy the least significant half of
+/// a machine word.
+#[allow(missing_docs)]
 pub enum DataHalfWord {
     HalfWord64(u32),
     HalfWord32(u16),
@@ -33,7 +33,7 @@ impl Into<DataWord> for DataHalfWord {
     }
 }
 
-/// A operand representing some value.
+/// Enumerates the valid operands.
 #[derive(Debug, Clone)]
 pub enum Operand {
     /// Representing a value in a register.
@@ -55,6 +55,7 @@ pub enum Operand {
     /// Representing the value stored in memory
     /// at the address stored in a register offset
     /// by an constant value.
+    #[allow(missing_docs)]
     AddressWithOffset {
         address: DataWord,
         offset_reg: String,
