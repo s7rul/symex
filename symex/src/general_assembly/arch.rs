@@ -72,7 +72,7 @@ pub enum ParseError {
 /// Denotes that the implementer can be treated as an architecture in this crate.
 pub trait Arch: Debug {
     /// Converts a slice of bytes to an [`Instruction`]
-    fn translate<'a>(&self, buff: &'a [u8], state: &GAState) -> Result<Instruction, ArchError>;
+    fn translate(&self, buff: &[u8], state: &GAState) -> Result<Instruction, ArchError>;
 
     /// Adds the architecture specific hooks to the [`RunConfig`]
     fn add_hooks(&self, cfg: &mut RunConfig);

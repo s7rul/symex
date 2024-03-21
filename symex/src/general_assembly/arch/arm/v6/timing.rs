@@ -13,7 +13,7 @@ pub(crate) fn cycle_count_m0plus_core(operation: &Operation) -> CycleCount {
             None => return 2,
         };
 
-        if address <= 0xdfffffff && address >= 0xd0000000 {
+        if (0xd0000000..=0xdfffffff).contains(&address) {
             1
         } else {
             2

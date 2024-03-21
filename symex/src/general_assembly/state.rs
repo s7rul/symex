@@ -173,12 +173,10 @@ impl GAState {
     }
 
     pub fn get_next_instruction_condition_expression(&mut self) -> Option<DExpr> {
-        match self.instruction_conditions.pop_front() {
-            Some(condition) => {
-                Some(self.get_expr(&condition).unwrap()) // TODO add error handling
-            }
-            None => None,
-        }
+        // TODO add error handling
+        self.instruction_conditions
+            .pop_front()
+            .map(|condition| self.get_expr(&condition).unwrap())
     }
 
     /// Create a state used for testing.

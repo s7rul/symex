@@ -229,21 +229,14 @@ impl BoolectorExpr {
     }
 
     pub fn get_constant(&self) -> Option<u64> {
-        if let Some(binary_str) = self.0.as_binary_str() {
-            let num = u64::from_str_radix(&binary_str, 2).unwrap();
-            Some(num)
-        } else {
-            None
-        }
+        self.0
+            .as_binary_str()
+            .map(|value| u64::from_str_radix(&value, 2).unwrap())
     }
 
     pub fn get_constant_bool(&self) -> Option<bool> {
         assert_eq!(self.len(), 1);
-        if let Some(binary_str) = self.0.as_binary_str() {
-            Some(binary_str != "0")
-        } else {
-            None
-        }
+        self.0.as_binary_str().map(|value| value != "0")
     }
 
     pub fn to_binary_string(&self) -> String {

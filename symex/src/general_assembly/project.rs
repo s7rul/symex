@@ -1,6 +1,5 @@
 use std::{collections::HashMap, fmt::Debug, fs};
 
-use armv6_m_instruction_parser::parse;
 use gimli::{DebugAbbrev, DebugInfo, DebugStr};
 use object::{Architecture, Object, ObjectSection, ObjectSymbol};
 use tracing::{debug, trace};
@@ -295,7 +294,7 @@ impl Project {
 
     pub fn get_memory_write_hook(&self, address: u64) -> Option<MemoryWriteHook> {
         match self.single_memory_write_hooks.get(&address) {
-            Some(hook) => Some(hook.clone()),
+            Some(hook) => Some(*hook),
             None => {
                 for ((start, end), hook) in &self.range_memory_write_hooks {
                     if address >= *start && address < *end {
@@ -309,7 +308,7 @@ impl Project {
 
     pub fn get_memory_read_hook(&self, address: u64) -> Option<MemoryReadHook> {
         match self.single_memory_read_hooks.get(&address) {
-            Some(hook) => Some(hook.clone()),
+            Some(hook) => Some(*hook),
             None => {
                 for ((start, end), hook) in &self.range_memory_read_hooks {
                     if address >= *start && address < *end {
@@ -322,11 +321,7 @@ impl Project {
     }
 
     pub fn address_in_range(&self, address: u64) -> bool {
-        if let Some(_) = self.segments.read_raw_bytes(address, 1) {
-            true
-        } else {
-            false
-        }
+        self.segments.read_raw_bytes(address, 1).is_some()
     }
 
     pub fn get_word_size(&self) -> u32 {

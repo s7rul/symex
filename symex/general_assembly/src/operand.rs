@@ -23,9 +23,9 @@ pub enum DataHalfWord {
     HalfWord16(u8),
 }
 
-impl Into<DataWord> for DataHalfWord {
-    fn into(self) -> DataWord {
-        match self {
+impl From<DataHalfWord> for DataWord {
+    fn from(value: DataHalfWord) -> DataWord {
+        match value {
             DataHalfWord::HalfWord64(v) => DataWord::Word64(v as u64),
             DataHalfWord::HalfWord32(v) => DataWord::Word32(v as u32),
             DataHalfWord::HalfWord16(v) => DataWord::Word16(v as u16),
@@ -93,10 +93,10 @@ impl From<u8> for DataWord {
     }
 }
 
-impl Into<u64> for DataWord {
-    fn into(self) -> u64 {
-        match self {
-            DataWord::Word64(v) => v as u64,
+impl From<DataWord> for u64 {
+    fn from(value: DataWord) -> u64 {
+        match value {
+            DataWord::Word64(v) => v,
             DataWord::Word32(v) => v as u64,
             DataWord::Word16(v) => v as u64,
             DataWord::Word8(v) => v as u64,

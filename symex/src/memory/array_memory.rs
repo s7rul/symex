@@ -60,7 +60,7 @@ impl ArrayMemory {
 
     /// Creates a new memory containing only uninitialized memory.
     pub fn new(ctx: &'static DContext, ptr_size: u32, endianness: Endianness) -> Self {
-        let memory = DArray::new(&ctx, ptr_size as usize, BITS_IN_BYTE as usize, "memory");
+        let memory = DArray::new(ctx, ptr_size as usize, BITS_IN_BYTE as usize, "memory");
 
         Self {
             ctx,
