@@ -7,6 +7,7 @@
 //! supported by this crate and presents
 //! the ISAs as dyn [`Arch`] types.
 pub mod v6;
+pub mod v7;
 
 use super::{Arch, ArchError, Family};
 use v6::ArmV6M;

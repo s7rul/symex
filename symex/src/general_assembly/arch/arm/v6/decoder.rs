@@ -1382,6 +1382,8 @@ impl ArmV6M {
             instruction_size: instruction_width,
             operations,
             max_cycle: max_cycle_count,
+            // TODO! Add in checks for wether or not this is true
+            memory_access: false,
         }
     }
 }

@@ -59,7 +59,7 @@ pub enum DataHalfWord {
 }
 
 impl From<DataHalfWord> for DataWord {
-    fn from(value:DataHalfWord) -> DataWord {
+    fn from(value: DataHalfWord) -> DataWord {
         match value {
             DataHalfWord::HalfWord64(v) => DataWord::Word64(v as u64),
             DataHalfWord::HalfWord32(v) => DataWord::Word32(v as u32),

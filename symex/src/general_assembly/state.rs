@@ -139,6 +139,16 @@ impl GAState {
         self.instruction_counter
     }
 
+    /// Gets the last instruction that was executed.
+    pub fn get_last_instruction(&self) -> Option<Instruction> {
+        self.last_instruction.clone()
+    }
+
+    /// Checks if the execution is currently inside of a conditional block.
+    pub fn get_in_conditional_block(&self) -> bool {
+        !self.instruction_conditions.is_empty()
+    }
+
     /// Increment the cycle counter with the cycle count of the last instruction.
     pub fn increment_cycle_count(&mut self) {
         // do nothing if cycles should not be counted

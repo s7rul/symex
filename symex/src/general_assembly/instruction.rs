@@ -1,6 +1,6 @@
 //! Describes a general assembly instruction.
 
-use super::{state::GAState};
+use super::state::GAState;
 
 use general_assembly::operation::Operation;
 
@@ -28,4 +28,7 @@ pub struct Instruction {
     /// This can depend on state and will be evaluated after the
     /// instruction has executed but before the next instruction.
     pub max_cycle: CycleCount,
+
+    /// Denotes wether or not the instruction required access to the underlying memory or not.
+    pub memory_access: bool,
 }

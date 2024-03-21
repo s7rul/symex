@@ -1577,6 +1577,7 @@ mod test {
                 instruction_size: 32,
                 operations: vec![Operation::SetZFlag(imm_0.clone())],
                 max_cycle: CycleCount::Value(0),
+                memory_access:false,
             },
             Instruction {
                 instruction_size: 32,
@@ -1584,6 +1585,7 @@ mod test {
                     conditions: vec![Condition::EQ, Condition::NE],
                 }],
                 max_cycle: CycleCount::Value(0),
+                memory_access: false,
             },
             Instruction {
                 instruction_size: 32,
@@ -1592,6 +1594,7 @@ mod test {
                     source: imm_1,
                 }],
                 max_cycle: CycleCount::Value(0),
+                memory_access: false,
             },
             Instruction {
                 instruction_size: 32,
@@ -1600,6 +1603,7 @@ mod test {
                     source: imm_0,
                 }],
                 max_cycle: CycleCount::Value(0),
+                memory_access: false
             },
         ];
 
