@@ -7,16 +7,14 @@
 //! architecture specific hooks.
 
 pub mod arm;
-use object::File;
-use thiserror::Error;
-use std::fmt::Debug;
-use std::error::Error;
 use crate::general_assembly::{instruction::Instruction, state::GAState, RunConfig};
+use object::File;
+use std::fmt::Debug;
+use thiserror::Error;
 
 #[derive(Debug, Eq, PartialEq, PartialOrd, Clone, Error)]
 /// General architecture related errors.
 pub enum ArchError {
-
     /// Thrown when an unsupported architecture is requested.
     #[error("Tried to execute code for an unsupported architecture")]
     UnsuportedArchitechture,
@@ -74,7 +72,7 @@ pub enum ParseError {
 /// Denotes that the implementer can be treated as an architecture in this crate.
 pub trait Arch: Debug {
     /// Converts a slice of bytes to an [`Instruction`]
-    fn translate<'a>(&self, buff: &'a [u8]) -> Result<Instruction, ArchError>;
+    fn translate<'a>(&self, buff: &'a [u8], state: &GAState) -> Result<Instruction, ArchError>;
 
     /// Adds the architecture specific hooks to the [`RunConfig`]
     fn add_hooks(&self, cfg: &mut RunConfig);
@@ -95,4 +93,3 @@ pub trait Family: Debug {
 pub fn arch_from_family<F: Family>(file: &File) -> Result<Box<dyn Arch>, ArchError> {
     F::try_from(file)
 }
-

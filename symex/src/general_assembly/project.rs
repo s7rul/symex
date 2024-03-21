@@ -354,18 +354,18 @@ impl Project {
     }
 
     /// Get the instruction att a address
-    pub fn get_instruction(&self, address: u64) -> Result<Instruction> {
+    pub fn get_instruction(&self, address: u64, state: &GAState) -> Result<Instruction> {
         trace!("Reading instruction from address: {:#010X}", address);
         match self.get_raw_word(address)? {
-            RawDataWord::Word64(d) => self.instruction_from_array_ptr(&d),
-            RawDataWord::Word32(d) => self.instruction_from_array_ptr(&d),
-            RawDataWord::Word16(d) => self.instruction_from_array_ptr(&d),
+            RawDataWord::Word64(d) => self.instruction_from_array_ptr(&d, state),
+            RawDataWord::Word32(d) => self.instruction_from_array_ptr(&d, state),
+            RawDataWord::Word16(d) => self.instruction_from_array_ptr(&d, state),
             RawDataWord::Word8(_) => todo!(),
         }
     }
 
-    fn instruction_from_array_ptr(&self, data: &[u8]) -> Result<Instruction> {
-        Ok(self.architecture.translate(data.clone())?)
+    fn instruction_from_array_ptr(&self, data: &[u8], state: &GAState) -> Result<Instruction> {
+        Ok(self.architecture.translate(data, state)?)
     }
 
     /// Get a byte of data from program memory.
