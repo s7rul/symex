@@ -25,12 +25,12 @@ impl BoolectorSolverContext {
         BoolectorExpr(BV::new(self.ctx.clone(), bits, Some(name)))
     }
 
-    /// Create a new expression set equal to `1` of size `bits.
+    /// Create a new expression set equal to `1` of size `bits`.
     pub fn one(&self, bits: u32) -> BoolectorExpr {
         BoolectorExpr(boolector::BV::from_u64(self.ctx.clone(), 1, bits))
     }
 
-    /// Create a new expression set to zero of size `bits.
+    /// Create a new expression set to zero of size `bits`.
     pub fn zero(&self, bits: u32) -> BoolectorExpr {
         BoolectorExpr(boolector::BV::zero(self.ctx.clone(), bits))
     }

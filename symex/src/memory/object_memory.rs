@@ -119,7 +119,7 @@ impl ObjectMemory {
         upper_bound: usize,
     ) -> Result<Vec<DExpr>, MemoryError> {
         // Fast path if address is a constant.
-        if let Some(_) = address.get_constant() {
+        if address.get_constant().is_some() {
             return Ok(vec![address.clone()]);
         }
 
@@ -143,9 +143,10 @@ impl ObjectMemory {
         let address = address.get_constant().unwrap();
 
         // Get the memory object with the address that is the closest below the passed address.
-        for obj in self.objects.range(0..=address).rev().take(1) {
-            // TODO: Perform bounds check.
-            return Ok((address, obj.1));
+
+        // TODO: Add bounds check
+        if let Some(object) = self.objects.range(0..=address).rev().take(1).next(){
+            return Ok((address,object.1));
         }
 
         panic!("Memory object not found");
@@ -158,9 +159,9 @@ impl ObjectMemory {
         let address = address.get_constant().unwrap();
 
         // Get the memory object with the address that is the closest below the passed address.
-        for obj in self.objects.range_mut(0..=address).rev().take(1) {
+        if let Some(object) = self.objects.range_mut(0..=address).rev().take(1).next() {
             // TODO: Perform bounds check.
-            return Ok((address, obj.1));
+            return Ok((address, object.1));
         }
 
         panic!("Memory object not found");

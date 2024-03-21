@@ -2,14 +2,15 @@ use crate::{memory::MemoryError, smt::SolverError};
 
 use self::project::ProjectError;
 
+use general_assembly::operand::DataWord;
+
+pub mod arch;
 pub mod executor;
 pub mod instruction;
 pub mod path_selection;
 pub mod project;
 pub mod run_config;
 pub mod state;
-pub mod translator;
-pub mod translators;
 pub mod vm;
 
 pub use run_config::*;
@@ -43,25 +44,6 @@ pub enum WordSize {
 }
 
 #[derive(Debug, Clone, Copy)]
-pub enum DataWord {
-    Word64(u64),
-    Word32(u32),
-    Word16(u16),
-    Word8(u8),
-}
-
-impl Into<u64> for DataWord {
-    fn into(self) -> u64 {
-        match self {
-            DataWord::Word64(v) => v as u64,
-            DataWord::Word32(v) => v as u64,
-            DataWord::Word16(v) => v as u64,
-            DataWord::Word8(v) => v as u64,
-        }
-    }
-}
-
-#[derive(Debug, Clone, Copy)]
 pub enum RawDataWord {
     Word64([u8; 8]),
     Word32([u8; 4]),
@@ -76,9 +58,9 @@ pub enum DataHalfWord {
     HalfWord16(u8),
 }
 
-impl Into<DataWord> for DataHalfWord {
-    fn into(self) -> DataWord {
-        match self {
+impl From<DataHalfWord> for DataWord {
+    fn from(value:DataHalfWord) -> DataWord {
+        match value {
             DataHalfWord::HalfWord64(v) => DataWord::Word64(v as u64),
             DataHalfWord::HalfWord32(v) => DataWord::Word32(v as u32),
             DataHalfWord::HalfWord16(v) => DataWord::Word16(v as u16),

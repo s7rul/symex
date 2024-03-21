@@ -29,7 +29,7 @@ impl BoolectorIncrementalSolver {
 
     pub fn get_value(&self, expr: &BoolectorExpr) -> Result<BoolectorExpr, SolverError> {
         let expr = expr.clone().simplify();
-        if let Some(_) = expr.get_constant() {
+        if expr.get_constant().is_some() {
             return Ok(expr.clone());
         }
 
@@ -107,7 +107,7 @@ impl BoolectorIncrementalSolver {
         upper_bound: usize,
     ) -> Result<Solutions<BoolectorExpr>, SolverError> {
         let expr = expr.clone().simplify();
-        if let Some(_) = expr.get_constant() {
+        if expr.get_constant().is_some() {
             return Ok(Solutions::Exactly(vec![expr]));
         }
 

@@ -6,15 +6,21 @@ use tracing::{debug, trace};
 
 use crate::{
     general_assembly::{path_selection::Path, state::HookOrInstruction},
-    smt::{DExpr, SolverError},
+    smt::{smt_boolector::BoolectorSolverContext, DExpr, SolverError},
+};
+
+use general_assembly::{
+    operand::{DataWord, Operand},
+    operation::Operation,
+    shift::Shift,
 };
 
 use super::{
-    instruction::{Instruction, Operand, Operation},
+    instruction::Instruction,
     project::Project,
     state::{ContinueInsideInstruction, GAState},
     vm::VM,
-    DataWord, Result,
+    Result,
 };
 
 pub struct GAExecutor<'vm> {
@@ -53,13 +59,10 @@ impl<'vm> GAExecutor<'vm> {
     pub fn resume_execution(&mut self) -> Result<PathResult> {
         let possible_continue = self.state.continue_in_instruction.to_owned();
 
-        match possible_continue {
-            Some(i) => {
-                self.continue_executing_instruction(&i)?;
-                self.state.continue_in_instruction = None;
-                self.state.set_last_instruction(i.instruction);
-            }
-            None => (),
+        if let Some(i) = possible_continue {
+            self.continue_executing_instruction(&i)?;
+            self.state.continue_in_instruction = None;
+            self.state.set_last_instruction(i.instruction);
         }
 
         loop {
@@ -193,7 +196,7 @@ impl<'vm> GAExecutor<'vm> {
             Operand::Immidiate(v) => Ok(self.get_dexpr_from_dataword(v.to_owned())),
             Operand::Address(address, width) => {
                 let address = self.get_dexpr_from_dataword(*address);
-                let address = self.resolve_address(address, &local)?;
+                let address = self.resolve_address(address, local)?;
                 self.get_memory(address, *width)
             }
             Operand::AddressWithOffset {
@@ -205,8 +208,15 @@ impl<'vm> GAExecutor<'vm> {
             Operand::AddressInLocal(local_name, width) => {
                 let address =
                     self.get_operand_value(&Operand::Local(local_name.to_owned()), local)?;
-                let address = self.resolve_address(address, &local)?;
+                let address = self.resolve_address(address, local)?;
                 self.get_memory(address, *width)
+            }
+            Operand::Flag(f) => {
+                let value = self.state.get_flag(f.clone());
+                match value {
+                    Some(value) => Ok(value.resize_unsigned(self.project.get_word_size())),
+                    None => todo!(),
+                }
             }
         }
     }
@@ -227,12 +237,12 @@ impl<'vm> GAExecutor<'vm> {
             Operand::AddressInLocal(local_name, width) => {
                 let address =
                     self.get_operand_value(&Operand::Local(local_name.to_owned()), local)?;
-                let address = self.resolve_address(address, &local)?;
+                let address = self.resolve_address(address, local)?;
                 self.set_memory(value, address, *width)?;
             }
             Operand::Address(address, width) => {
                 let address = self.get_dexpr_from_dataword(*address);
-                let address = self.resolve_address(address, &local)?;
+                let address = self.resolve_address(address, local)?;
                 self.set_memory(value, address, *width)?;
             }
             Operand::AddressWithOffset {
@@ -242,6 +252,12 @@ impl<'vm> GAExecutor<'vm> {
             } => todo!(),
             Operand::Local(k) => {
                 local.insert(k.to_owned(), value);
+            }
+            Operand::Flag(f) => {
+                // TODO!
+                //
+                // Might be a good thing to throw an error here if the value is not 0 or 1.
+                self.state.set_flag(f.clone(), value.resize_unsigned(1));
             }
         }
         Ok(())
@@ -261,7 +277,9 @@ impl<'vm> GAExecutor<'vm> {
 
                 if addresses.len() == 1 {
                     return Ok(addresses[0].get_constant().unwrap());
-                } else if addresses.len() == 0 {
+                }
+
+                if addresses.is_empty() {
                     return Err(SolverError::Unsat.into());
                 }
 
@@ -343,11 +361,32 @@ impl<'vm> GAExecutor<'vm> {
 
         self.state.current_instruction = Some(i.to_owned());
 
-        // initiate local variable storage
-        let mut local: HashMap<String, DExpr> = HashMap::new();
-        for (n, operation) in i.operations.iter().enumerate() {
-            self.current_operation_index = n;
-            self.execute_operation(operation, &mut local)?;
+        // check if we should actually execute the instruction
+        let should_run = match self.state.get_next_instruction_condition_expression() {
+            Some(c) => match c.get_constant_bool() {
+                Some(constant_c) => constant_c,
+                None => {
+                    let true_possible = self.state.constraints.is_sat_with_constraint(&c)?;
+                    let false_possible = self.state.constraints.is_sat_with_constraint(&c.not())?;
+
+                    if true_possible && false_possible {
+                        self.fork(c.not())?;
+                        self.state.constraints.assert(&c);
+                    }
+
+                    true_possible
+                }
+            },
+            None => true,
+        };
+
+        if should_run {
+            // initiate local variable storage
+            let mut local: HashMap<String, DExpr> = HashMap::new();
+            for (n, operation) in i.operations.iter().enumerate() {
+                self.current_operation_index = n;
+                self.execute_operation(operation, &mut local)?;
+            }
         }
 
         Ok(())
@@ -374,8 +413,8 @@ impl<'vm> GAExecutor<'vm> {
                 operand1,
                 operand2,
             } => {
-                let op1 = self.get_operand_value(operand1, &local)?;
-                let op2 = self.get_operand_value(operand2, &local)?;
+                let op1 = self.get_operand_value(operand1, local)?;
+                let op2 = self.get_operand_value(operand2, local)?;
                 let result = op1.add(&op2);
                 self.set_operand_value(destination, result, local)?;
             }
@@ -384,8 +423,8 @@ impl<'vm> GAExecutor<'vm> {
                 operand1,
                 operand2,
             } => {
-                let op1 = self.get_operand_value(operand1, &local)?;
-                let op2 = self.get_operand_value(operand2, &local)?;
+                let op1 = self.get_operand_value(operand1, local)?;
+                let op2 = self.get_operand_value(operand2, local)?;
                 let result = op1.sub(&op2);
                 self.set_operand_value(destination, result, local)?;
             }
@@ -394,9 +433,29 @@ impl<'vm> GAExecutor<'vm> {
                 operand1,
                 operand2,
             } => {
-                let op1 = self.get_operand_value(operand1, &local)?;
-                let op2 = self.get_operand_value(operand2, &local)?;
+                let op1 = self.get_operand_value(operand1, local)?;
+                let op2 = self.get_operand_value(operand2, local)?;
                 let result = op1.mul(&op2);
+                self.set_operand_value(destination, result, local)?;
+            }
+            Operation::UDiv {
+                destination,
+                operand1,
+                operand2,
+            } => {
+                let op1 = self.get_operand_value(operand1, local)?;
+                let op2 = self.get_operand_value(operand2, local)?;
+                let result = op1.udiv(&op2);
+                self.set_operand_value(destination, result, local)?;
+            }
+            Operation::SDiv {
+                destination,
+                operand1,
+                operand2,
+            } => {
+                let op1 = self.get_operand_value(operand1, local)?;
+                let op2 = self.get_operand_value(operand2, local)?;
+                let result = op1.sdiv(&op2);
                 self.set_operand_value(destination, result, local)?;
             }
             Operation::And {
@@ -404,8 +463,8 @@ impl<'vm> GAExecutor<'vm> {
                 operand1,
                 operand2,
             } => {
-                let op1 = self.get_operand_value(operand1, &local)?;
-                let op2 = self.get_operand_value(operand2, &local)?;
+                let op1 = self.get_operand_value(operand1, local)?;
+                let op2 = self.get_operand_value(operand2, local)?;
                 let result = op1.and(&op2);
                 self.set_operand_value(destination, result, local)?;
             }
@@ -414,8 +473,8 @@ impl<'vm> GAExecutor<'vm> {
                 operand1,
                 operand2,
             } => {
-                let op1 = self.get_operand_value(operand1, &local)?;
-                let op2 = self.get_operand_value(operand2, &local)?;
+                let op1 = self.get_operand_value(operand1, local)?;
+                let op2 = self.get_operand_value(operand2, local)?;
                 let result = op1.or(&op2);
                 self.set_operand_value(destination, result, local)?;
             }
@@ -424,8 +483,8 @@ impl<'vm> GAExecutor<'vm> {
                 operand1,
                 operand2,
             } => {
-                let op1 = self.get_operand_value(operand1, &local)?;
-                let op2 = self.get_operand_value(operand2, &local)?;
+                let op1 = self.get_operand_value(operand1, local)?;
+                let op2 = self.get_operand_value(operand2, local)?;
                 let result = op1.xor(&op2);
                 self.set_operand_value(destination, result, local)?;
             }
@@ -438,13 +497,49 @@ impl<'vm> GAExecutor<'vm> {
                 let result = op.not();
                 self.set_operand_value(destination, result, local)?;
             }
+            Operation::Shift {
+                destination,
+                operand,
+                shift_n,
+                shift_t,
+            } => {
+                let value = self.get_operand_value(operand, local)?;
+                let shift_amount = self.get_operand_value(shift_n, local)?;
+                let result = match shift_t {
+                    Shift::Lsl => value.sll(&shift_amount),
+                    Shift::Lsr => value.srl(&shift_amount),
+                    Shift::Asr => value.sra(&shift_amount),
+                    Shift::Rrx => {
+                        let ret = value
+                            .and(&shift_amount.sub(&self.state.ctx.from_u64(1, 32)))
+                            .srl(&self.state.ctx.from_u64(1, 32))
+                            .simplify();
+                        ret.or(&self
+                            .state
+                            // Set the carry bit right above the last bit
+                            .get_flag("C".to_owned())
+                            .unwrap()
+                            .sll(&shift_amount.add(&self.state.ctx.from_u64(1, 32))))
+                    }
+                    Shift::Ror => {
+                        let word_size = self.state.ctx.from_u64(
+                            self.project.get_word_size() as u64,
+                            self.project.get_word_size(),
+                        );
+                        value
+                            .srl(&shift_amount)
+                            .or(&value.srl(&word_size).sub(&shift_amount))
+                    }
+                };
+                self.set_operand_value(destination, result, local)?;
+            }
             Operation::Sl {
                 destination,
                 operand,
                 shift,
             } => {
-                let value = self.get_operand_value(operand, &local)?;
-                let shift_amount = self.get_operand_value(shift, &local)?;
+                let value = self.get_operand_value(operand, local)?;
+                let shift_amount = self.get_operand_value(shift, local)?;
                 let result = value.sll(&shift_amount);
                 self.set_operand_value(destination, result, local)?;
             }
@@ -453,8 +548,8 @@ impl<'vm> GAExecutor<'vm> {
                 operand,
                 shift,
             } => {
-                let value = self.get_operand_value(operand, &local)?;
-                let shift_amount = self.get_operand_value(shift, &local)?;
+                let value = self.get_operand_value(operand, local)?;
+                let shift_amount = self.get_operand_value(shift, local)?;
                 let result = value.srl(&shift_amount);
                 self.set_operand_value(destination, result, local)?;
             }
@@ -463,8 +558,8 @@ impl<'vm> GAExecutor<'vm> {
                 operand,
                 shift,
             } => {
-                let value = self.get_operand_value(operand, &local)?;
-                let shift_amount = self.get_operand_value(shift, &local)?;
+                let value = self.get_operand_value(operand, local)?;
+                let shift_amount = self.get_operand_value(shift, local)?;
                 let result = value.sra(&shift_amount);
                 self.set_operand_value(destination, result, local)?;
             }
@@ -477,8 +572,8 @@ impl<'vm> GAExecutor<'vm> {
                     self.project.get_word_size() as u64,
                     self.project.get_word_size(),
                 );
-                let value = self.get_operand_value(operand, &local)?;
-                let shift = self.get_operand_value(shift, &local)?.srem(&word_size);
+                let value = self.get_operand_value(operand, local)?;
+                let shift = self.get_operand_value(shift, local)?.srem(&word_size);
                 let result = value.srl(&shift).or(&value.srl(&word_size).sub(&shift));
                 self.set_operand_value(destination, result, local)?;
             }
@@ -486,7 +581,7 @@ impl<'vm> GAExecutor<'vm> {
                 destination,
                 condition,
             } => {
-                let dest_value = self.get_operand_value(destination, &local)?;
+                let dest_value = self.get_operand_value(destination, local)?;
                 let c = self.state.get_expr(condition)?.simplify();
                 trace!("conditional expr: {:?}", c);
 
@@ -546,8 +641,11 @@ impl<'vm> GAExecutor<'vm> {
 
                 self.state.set_register("PC".to_owned(), destination)?;
             }
+            Operation::ConditionalExecution { conditions } => {
+                self.state.add_instruction_conditions(conditions);
+            }
             Operation::SetNFlag(operand) => {
-                let value = self.get_operand_value(operand, &local)?;
+                let value = self.get_operand_value(operand, local)?;
                 let shift = self
                     .state
                     .ctx
@@ -556,7 +654,7 @@ impl<'vm> GAExecutor<'vm> {
                 self.state.set_flag("N".to_owned(), result);
             }
             Operation::SetZFlag(operand) => {
-                let value = self.get_operand_value(operand, &local)?;
+                let value = self.get_operand_value(operand, local)?;
                 let result = value._eq(&self.state.ctx.zero(self.project.get_word_size()));
                 self.state.set_flag("Z".to_owned(), result);
             }
@@ -566,8 +664,8 @@ impl<'vm> GAExecutor<'vm> {
                 sub,
                 carry,
             } => {
-                let op1 = self.get_operand_value(operand1, &local)?;
-                let op2 = self.get_operand_value(operand2, &local)?;
+                let op1 = self.get_operand_value(operand1, local)?;
+                let op2 = self.get_operand_value(operand2, local)?;
                 let one = self.state.ctx.from_u64(1, self.project.get_word_size());
 
                 let result = match (sub, carry) {
@@ -609,8 +707,8 @@ impl<'vm> GAExecutor<'vm> {
                 sub,
                 carry,
             } => {
-                let op1 = self.get_operand_value(operand1, &local)?;
-                let op2 = self.get_operand_value(operand2, &local)?;
+                let op1 = self.get_operand_value(operand1, local)?;
+                let op2 = self.get_operand_value(operand2, local)?;
                 let one = self.state.ctx.from_u64(1, self.project.get_word_size());
 
                 let result = match (sub, carry) {
@@ -644,7 +742,7 @@ impl<'vm> GAExecutor<'vm> {
                 operand,
                 bits,
             } => {
-                let op = self.get_operand_value(operand, &local)?;
+                let op = self.get_operand_value(operand, local)?;
                 let valid_bits = op.resize_unsigned(*bits);
                 let result = valid_bits.zero_ext(self.project.get_word_size());
                 self.set_operand_value(destination, result, local)?;
@@ -654,9 +752,18 @@ impl<'vm> GAExecutor<'vm> {
                 operand,
                 bits,
             } => {
-                let op = self.get_operand_value(operand, &local)?;
+                let op = self.get_operand_value(operand, local)?;
                 let valid_bits = op.resize_unsigned(*bits);
                 let result = valid_bits.sign_ext(self.project.get_word_size());
+                self.set_operand_value(destination, result, local)?;
+            }
+            Operation::Resize {
+                destination,
+                operand,
+                bits,
+            } => {
+                let op = self.get_operand_value(operand, local)?;
+                let result = op.resize_unsigned(*bits);
                 self.set_operand_value(destination, result, local)?;
             }
             Operation::Adc {
@@ -727,9 +834,93 @@ impl<'vm> GAExecutor<'vm> {
                 let c = result.srl(&word_size_minus_one).resize_unsigned(1);
                 self.state.set_flag("C".to_owned(), c);
             }
+            Operation::CountOnes {
+                destination,
+                operand,
+            } => {
+                let operand = self.get_operand_value(operand, local)?;
+                let result = count_ones(&operand, self.state.ctx, self.project.get_word_size());
+                self.set_operand_value(destination, result, local)?;
+            }
+            Operation::CountZeroes {
+                destination,
+                operand,
+            } => {
+                let operand = self.get_operand_value(operand, local)?;
+                let result = count_zeroes(&operand, self.state.ctx, self.project.get_word_size());
+                self.set_operand_value(destination, result, local)?;
+            }
+            Operation::CountLeadingOnes {
+                destination,
+                operand,
+            } => {
+                let operand = self.get_operand_value(operand, local)?;
+                let result =
+                    count_leading_ones(&operand, self.state.ctx, self.project.get_word_size());
+                self.set_operand_value(destination, result, local)?;
+            }
+            Operation::CountLeadingZeroes {
+                destination,
+                operand,
+            } => {
+                let operand = self.get_operand_value(operand, local)?;
+                let result =
+                    count_leading_zeroes(&operand, self.state.ctx, self.project.get_word_size());
+                self.set_operand_value(destination, result, local)?;
+            }
         }
         Ok(())
     }
+}
+
+fn count_ones(input: &DExpr, ctx: &BoolectorSolverContext, word_size: u32) -> DExpr {
+    let mut count = ctx.from_u64(0, word_size);
+    let mask = ctx.from_u64(1, word_size);
+    for n in 0..word_size {
+        let symbolic_n = ctx.from_u64(n as u64, word_size);
+        let to_add = input.srl(&symbolic_n).and(&mask);
+        count = count.add(&to_add);
+    }
+    count
+}
+
+fn count_zeroes(input: &DExpr, ctx: &BoolectorSolverContext, word_size: u32) -> DExpr {
+    let input = input.not();
+    let mut count = ctx.from_u64(0, word_size);
+    let mask = ctx.from_u64(1, word_size);
+    for n in 0..word_size {
+        let symbolic_n = ctx.from_u64(n as u64, word_size);
+        let to_add = input.srl(&symbolic_n).and(&mask);
+        count = count.add(&to_add);
+    }
+    count
+}
+
+fn count_leading_ones(input: &DExpr, ctx: &BoolectorSolverContext, word_size: u32) -> DExpr {
+    let mut count = ctx.from_u64(0, word_size);
+    let mut stop_count_mask = ctx.from_u64(1, word_size);
+    let mask = ctx.from_u64(1, word_size);
+    for n in (0..word_size).rev() {
+        let symbolic_n = ctx.from_u64(n as u64, word_size);
+        let to_add = input.srl(&symbolic_n).and(&mask).and(&stop_count_mask);
+        stop_count_mask = to_add.clone();
+        count = count.add(&to_add);
+    }
+    count
+}
+
+fn count_leading_zeroes(input: &DExpr, ctx: &BoolectorSolverContext, word_size: u32) -> DExpr {
+    let input = input.not();
+    let mut count = ctx.from_u64(0, word_size);
+    let mut stop_count_mask = ctx.from_u64(1, word_size);
+    let mask = ctx.from_u64(1, word_size);
+    for n in (0..word_size).rev() {
+        let symbolic_n = ctx.from_u64(n as u64, word_size);
+        let to_add = input.srl(&symbolic_n).and(&mask).and(&stop_count_mask);
+        stop_count_mask = to_add.clone();
+        count = count.add(&to_add);
+    }
+    count
 }
 
 /// Does a add with carry and returns result, carry out and overflow like a hw adder.
@@ -758,8 +949,9 @@ mod test {
 
     use crate::{
         general_assembly::{
-            executor::{add_with_carry, GAExecutor},
-            instruction::{Operand, Operation},
+            arch::arm::v6::ArmV6M,
+            executor::{add_with_carry, count_leading_zeroes, GAExecutor},
+            instruction::{CycleCount, Instruction},
             project::Project,
             state::GAState,
             vm::VM,
@@ -767,6 +959,85 @@ mod test {
         },
         smt::{DContext, DSolver},
     };
+
+    use general_assembly::{condition::Condition, operand::Operand, operation::Operation};
+
+    use super::{count_leading_ones, count_ones, count_zeroes};
+
+    #[test]
+    fn test_count_ones_concrete() {
+        let ctx = DContext::new();
+        let num1 = ctx.from_u64(1, 32);
+        let num32 = ctx.from_u64(32, 32);
+        let numff = ctx.from_u64(0xff, 32);
+        let result = count_ones(&num1, &ctx, 32);
+        assert_eq!(result.get_constant().unwrap(), 1);
+        let result = count_ones(&num32, &ctx, 32);
+        assert_eq!(result.get_constant().unwrap(), 1);
+        let result = count_ones(&numff, &ctx, 32);
+        assert_eq!(result.get_constant().unwrap(), 8);
+    }
+
+    #[test]
+    fn test_count_ones_symbolic() {
+        let ctx = DContext::new();
+        let solver = DSolver::new(&ctx);
+        let any_u32 = ctx.unconstrained(32, "any1");
+        let num_0x100 = ctx.from_u64(0x100, 32);
+        let num_8 = ctx.from_u64(8, 32);
+        solver.assert(&any_u32.ult(&num_0x100));
+        let result = count_ones(&any_u32, &ctx, 32);
+        let result_below_or_equal_8 = result.ulte(&num_8);
+        let result_above_8 = result.ugt(&num_8);
+        let can_be_below_or_equal_8 = solver
+            .is_sat_with_constraint(&result_below_or_equal_8)
+            .unwrap();
+        let can_be_above_8 = solver.is_sat_with_constraint(&result_above_8).unwrap();
+        assert!(can_be_below_or_equal_8);
+        assert!(!can_be_above_8);
+    }
+
+    #[test]
+    fn test_count_zeroes_concrete() {
+        let ctx = DContext::new();
+        let num1 = ctx.from_u64(!1, 32);
+        let num32 = ctx.from_u64(!32, 32);
+        let numff = ctx.from_u64(!0xff, 32);
+        let result = count_zeroes(&num1, &ctx, 32);
+        assert_eq!(result.get_constant().unwrap(), 1);
+        let result = count_zeroes(&num32, &ctx, 32);
+        assert_eq!(result.get_constant().unwrap(), 1);
+        let result = count_zeroes(&numff, &ctx, 32);
+        assert_eq!(result.get_constant().unwrap(), 8);
+    }
+
+    #[test]
+    fn test_count_leading_ones_concrete() {
+        let ctx = DContext::new();
+        let input = ctx.from_u64(0b1000_0000, 8);
+        let result = count_leading_ones(&input, &ctx, 8);
+        assert_eq!(result.get_constant().unwrap(), 1);
+        let input = ctx.from_u64(0b1100_0000, 8);
+        let result = count_leading_ones(&input, &ctx, 8);
+        assert_eq!(result.get_constant().unwrap(), 2);
+        let input = ctx.from_u64(0b1110_0011, 8);
+        let result = count_leading_ones(&input, &ctx, 8);
+        assert_eq!(result.get_constant().unwrap(), 3);
+    }
+
+    #[test]
+    fn test_count_leading_zeroes_concrete() {
+        let ctx = DContext::new();
+        let input = ctx.from_u64(!0b1000_0000, 8);
+        let result = count_leading_zeroes(&input, &ctx, 8);
+        assert_eq!(result.get_constant().unwrap(), 1);
+        let input = ctx.from_u64(!0b1100_0000, 8);
+        let result = count_leading_zeroes(&input, &ctx, 8);
+        assert_eq!(result.get_constant().unwrap(), 2);
+        let input = ctx.from_u64(!0b1110_0011, 8);
+        let result = count_leading_zeroes(&input, &ctx, 8);
+        assert_eq!(result.get_constant().unwrap(), 3);
+    }
 
     #[test]
     fn test_add_with_carry() {
@@ -840,7 +1111,7 @@ mod test {
             0,
             WordSize::Bit32,
             Endianness::Little,
-            object::Architecture::Arm,
+            ArmV6M {},
             HashMap::new(),
             HashMap::new(),
             HashMap::new(),
@@ -1288,5 +1559,60 @@ mod test {
             .get_constant_bool()
             .unwrap();
         assert!(v_flag);
+    }
+
+    #[test]
+    fn test_conditional_execution() {
+        let mut vm = setup_test_vm();
+        let project = vm.project;
+        let mut executor =
+            GAExecutor::from_state(vm.paths.get_path().unwrap().state, &mut vm, project);
+        let imm_0 = Operand::Immidiate(DataWord::Word32(0));
+        let imm_1 = Operand::Immidiate(DataWord::Word32(1));
+        let local = HashMap::new();
+        let r0 = Operand::Register("R0".to_owned());
+
+        let program1 = vec![
+            Instruction {
+                instruction_size: 32,
+                operations: vec![Operation::SetZFlag(imm_0.clone())],
+                max_cycle: CycleCount::Value(0),
+            },
+            Instruction {
+                instruction_size: 32,
+                operations: vec![Operation::ConditionalExecution {
+                    conditions: vec![Condition::EQ, Condition::NE],
+                }],
+                max_cycle: CycleCount::Value(0),
+            },
+            Instruction {
+                instruction_size: 32,
+                operations: vec![Operation::Move {
+                    destination: r0.clone(),
+                    source: imm_1,
+                }],
+                max_cycle: CycleCount::Value(0),
+            },
+            Instruction {
+                instruction_size: 32,
+                operations: vec![Operation::Move {
+                    destination: r0.clone(),
+                    source: imm_0,
+                }],
+                max_cycle: CycleCount::Value(0),
+            },
+        ];
+
+        for p in program1 {
+            executor.execute_instruction(&p).ok();
+        }
+
+        let r0_value = executor
+            .get_operand_value(&r0, &local)
+            .ok()
+            .unwrap()
+            .get_constant()
+            .unwrap();
+        assert_eq!(r0_value, 1);
     }
 }

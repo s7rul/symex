@@ -50,7 +50,7 @@ impl VM {
     }
 
     pub fn run(&mut self) -> Result<Option<(PathResult, GAState)>> {
-        while let Some(path) = self.paths.get_path() {
+        if let Some(path) = self.paths.get_path() {
             // try stuff
             let mut executor = GAExecutor::from_state(path.state, self, self.project);
 

@@ -1,306 +1,25 @@
-//! Translator for the armv6-m instruction set
+//! Defines translation rules from arm [`Operation`]s to general assembly
+//! [`Operation`](GAOperation)s.
 
 use armv6_m_instruction_parser::{
+    conditions::Condition as ArmCodition,
     instructons::{Instruction, Operation},
     registers::{Register, SpecialRegister},
 };
-use regex::Regex;
-use tracing::trace;
 
-use crate::{
-    elf_util::{ExpressionType, Variable},
-    general_assembly::{
-        instruction::{Condition, CycleCount, Operand},
-        project::{MemoryHookAddress, MemoryReadHook, PCHook, RegisterReadHook, RegisterWriteHook},
-        state::GAState,
-        translator::Translatable,
-        DataWord, RunConfig,
-    },
+use general_assembly::{
+    condition::Condition,
+    operand::{DataWord, Operand},
+    operation::Operation as GAOperation,
 };
 
-type GAInstruction = crate::general_assembly::instruction::Instruction;
-type GAOperation = crate::general_assembly::instruction::Operation;
-type ArmCodition = armv6_m_instruction_parser::conditions::Condition;
+use crate::general_assembly::instruction::Instruction as GAInstruction;
 
-fn cycle_count_m0plus_core(operation: &Operation) -> CycleCount {
-    // SIO based on the rp2040 make this configurable later
-    let address_max_cycle_function: fn(state: &GAState) -> usize = |state| {
-        let address = match state.registers.get("LastAddr").unwrap().get_constant() {
-            Some(v) => v,
-            None => return 2,
-        };
+use super::ArmV6M;
 
-        if address <= 0xdfffffff && address >= 0xd0000000 {
-            1
-        } else {
-            2
-        }
-    };
-    match operation {
-        Operation::ADCReg { m: _, n: _, d: _ } => CycleCount::Value(1),
-        Operation::ADDImm { imm: _, n: _, d: _ } => CycleCount::Value(1),
-        Operation::ADDReg { m: _, n: _, d } => {
-            let max_cycle = if *d == Register::PC { 2 } else { 1 };
-            CycleCount::Value(max_cycle)
-        }
-        Operation::ADDImmSP { d: _, imm: _ } => CycleCount::Value(1),
-        Operation::ADDRegSP { d: _, m: _ } => CycleCount::Value(1),
-        Operation::ADR { d: _, imm: _ } => CycleCount::Value(1),
-        Operation::ANDReg { m: _, dn: _ } => CycleCount::Value(1),
-        Operation::ASRImm { imm: _, m: _, d: _ } => CycleCount::Value(1),
-        Operation::ASRReg { m: _, dn: _ } => CycleCount::Value(1),
-        Operation::B { cond: _, imm: _ } => {
-            let max_cycle: fn(state: &GAState) -> usize = |state| {
-                if state.get_has_jumped() {
-                    2
-                } else {
-                    1
-                }
-            };
-            CycleCount::Function(max_cycle)
-        }
-        Operation::BICReg { m: _, dn: _ } => CycleCount::Value(1),
-        Operation::BKPT { imm: _ } => CycleCount::Value(0),
-        Operation::BL { imm: _ } => CycleCount::Value(3),
-        Operation::BLXReg { m: _ } => CycleCount::Value(2),
-        Operation::BX { m: _ } => CycleCount::Value(2),
-        Operation::CMNReg { m: _, n: _ } => CycleCount::Value(1),
-        Operation::CMPImm { n: _, imm: _ } => CycleCount::Value(1),
-        Operation::CMPReg { m: _, n: _ } => CycleCount::Value(1),
-        Operation::CPS { im: _ } => CycleCount::Value(1),
-        Operation::CPY => {
-            // this is not a real instruction is equvelatn to mov
-            unreachable!()
-        }
-        Operation::DMB { option: _ } => CycleCount::Value(3),
-        Operation::DSB { option: _ } => CycleCount::Value(3),
-        Operation::EORReg { m: _, dn: _ } => CycleCount::Value(1),
-        Operation::ISB { option: _ } => CycleCount::Value(3),
-        Operation::LDM { n: _, reg_list } => {
-            let max_cycle = 1 + reg_list.len();
-            CycleCount::Value(max_cycle)
-        }
-
-        // \/\/\/\/ Can be one depending on core implementation and address \/\/\/\/
-        Operation::LDRImm { imm: _, n: _, t: _ } => {
-            CycleCount::Function(address_max_cycle_function)
-        }
-        Operation::LDRLiteral { t: _, imm: _ } => CycleCount::Function(address_max_cycle_function),
-        Operation::LDRReg { m: _, n: _, t: _ } => CycleCount::Function(address_max_cycle_function),
-        Operation::LDRBImm { imm: _, n: _, t: _ } => {
-            CycleCount::Function(address_max_cycle_function)
-        }
-        Operation::LDRBReg { m: _, n: _, t: _ } => CycleCount::Function(address_max_cycle_function),
-        Operation::LDRHImm { imm: _, n: _, t: _ } => {
-            CycleCount::Function(address_max_cycle_function)
-        }
-        Operation::LDRHReg { m: _, n: _, t: _ } => CycleCount::Function(address_max_cycle_function),
-        Operation::LDRSBReg { m: _, n: _, t: _ } => {
-            CycleCount::Function(address_max_cycle_function)
-        }
-        Operation::LDRSH { m: _, n: _, t: _ } => CycleCount::Function(address_max_cycle_function),
-        // /\/\/\/\ Can be one depending on core implementation and address /\/\/\/\
-        Operation::LSLImm { imm: _, m: _, d: _ } => CycleCount::Value(1),
-        Operation::LSLReg { m: _, dn: _ } => CycleCount::Value(1),
-        Operation::LSRImm { imm: _, m: _, d: _ } => CycleCount::Value(1),
-        Operation::LSRReg { m: _, dn: _ } => CycleCount::Value(1),
-        Operation::MOVImm { d: _, imm: _ } => CycleCount::Value(1),
-        Operation::MOVReg {
-            m: _,
-            d,
-            set_flags: _,
-        } => {
-            let max_cycle = if *d == Register::PC { 2 } else { 1 };
-            CycleCount::Value(max_cycle)
-        }
-        Operation::MRS { d: _, sysm: _ } => CycleCount::Value(3),
-        Operation::MSRReg { n: _, sysm: _ } => CycleCount::Value(3),
-        Operation::MUL { n: _, dm: _ } => {
-            CycleCount::Value(32) // Can be one depending on core implementation might be able to read this from somewhere.
-        }
-        Operation::MVNReg { m: _, d: _ } => CycleCount::Value(1),
-        Operation::NOP => CycleCount::Value(1),
-        Operation::ORRReg { m: _, dn: _ } => CycleCount::Value(1),
-        Operation::POP { reg_list } => {
-            let max_cycle = if reg_list.contains(&Register::PC) {
-                3
-            } else {
-                1
-            } + reg_list.len();
-            CycleCount::Value(max_cycle)
-        }
-        Operation::PUSH { reg_list } => CycleCount::Value(1 + reg_list.len()),
-        Operation::REV { m: _, d: _ } => CycleCount::Value(1),
-        Operation::REV16 { m: _, d: _ } => CycleCount::Value(1),
-        Operation::REVSH { m: _, d: _ } => CycleCount::Value(1),
-        Operation::RORReg { m: _, dn: _ } => CycleCount::Value(1),
-        Operation::RSBImm { n: _, d: _ } => CycleCount::Value(1),
-        Operation::SBCReg { m: _, dn: _ } => CycleCount::Value(1),
-        Operation::SEV => CycleCount::Value(1),
-        Operation::STM { n: _, reg_list } => CycleCount::Value(1 + reg_list.len()),
-
-        // \/\/\/\/ Can be one depending on core implementation and address \/\/\/\/
-        Operation::STRImm { imm: _, n: _, t: _ } => {
-            CycleCount::Function(address_max_cycle_function)
-        }
-        Operation::STRReg { m: _, n: _, t: _ } => CycleCount::Function(address_max_cycle_function),
-        Operation::STRBImm { imm: _, n: _, t: _ } => {
-            CycleCount::Function(address_max_cycle_function)
-        }
-        Operation::STRBReg { m: _, n: _, t: _ } => CycleCount::Function(address_max_cycle_function),
-        Operation::STRHImm { imm: _, n: _, t: _ } => {
-            CycleCount::Function(address_max_cycle_function)
-        }
-        Operation::STRHReg { m: _, n: _, t: _ } => CycleCount::Function(address_max_cycle_function),
-        // /\/\/\/\ Can be one depending on core implementation and address /\/\/\/\
-        Operation::SUBImm { imm: _, n: _, d: _ } => CycleCount::Value(1),
-        Operation::SUBReg { m: _, n: _, d: _ } => CycleCount::Value(1),
-        Operation::SUBImmSP { imm: _ } => CycleCount::Value(1),
-        Operation::SVC { imm: _ } => CycleCount::Value(0),
-        Operation::SXTB { m: _, d: _ } => CycleCount::Value(1),
-        Operation::SXTH { m: _, d: _ } => CycleCount::Value(1),
-        Operation::TSTReg { m: _, n: _ } => CycleCount::Value(1),
-        Operation::UDFT1 { imm: _ } => {
-            // generates a undefined exeption just panic for now
-            unimplemented!()
-        }
-        Operation::UDFT2 { imm: _ } => {
-            // generates a undefined exeption just panic for now
-            unimplemented!()
-        }
-        Operation::UXTB { m: _, d: _ } => CycleCount::Value(1),
-        Operation::UXTH { m: _, d: _ } => CycleCount::Value(1),
-        Operation::WFE => todo!(),
-        Operation::WFI => todo!(),
-        Operation::YIELD => todo!(),
-    }
-}
-
-#[allow(dead_code)]
-fn cycle_count_m0_core(operation: &Operation) -> CycleCount {
-    match operation {
-        Operation::ADCReg { m: _, n: _, d: _ } => CycleCount::Value(1),
-        Operation::ADDImm { imm: _, n: _, d: _ } => CycleCount::Value(1),
-        Operation::ADDReg { m: _, n: _, d } => {
-            let max_cycle = if *d == Register::PC { 3 } else { 1 };
-            CycleCount::Value(max_cycle)
-        }
-        Operation::ADDImmSP { d: _, imm: _ } => CycleCount::Value(1),
-        Operation::ADDRegSP { d: _, m: _ } => CycleCount::Value(1),
-        Operation::ADR { d: _, imm: _ } => CycleCount::Value(1),
-        Operation::ANDReg { m: _, dn: _ } => CycleCount::Value(1),
-        Operation::ASRImm { imm: _, m: _, d: _ } => CycleCount::Value(1),
-        Operation::ASRReg { m: _, dn: _ } => CycleCount::Value(1),
-        Operation::B { cond: _, imm: _ } => {
-            let max_cycle: fn(state: &GAState) -> usize = |state| {
-                if state.get_has_jumped() {
-                    3
-                } else {
-                    1
-                }
-            };
-            CycleCount::Function(max_cycle)
-        }
-        Operation::BICReg { m: _, dn: _ } => CycleCount::Value(1),
-        Operation::BKPT { imm: _ } => CycleCount::Value(0),
-        Operation::BL { imm: _ } => CycleCount::Value(4),
-        Operation::BLXReg { m: _ } => CycleCount::Value(3),
-        Operation::BX { m: _ } => CycleCount::Value(3),
-        Operation::CMNReg { m: _, n: _ } => CycleCount::Value(1),
-        Operation::CMPImm { n: _, imm: _ } => CycleCount::Value(1),
-        Operation::CMPReg { m: _, n: _ } => CycleCount::Value(1),
-        Operation::CPS { im: _ } => CycleCount::Value(1),
-        Operation::CPY => {
-            // this is not a real instruction is equvelatn to mov
-            unreachable!()
-        }
-        Operation::DMB { option: _ } => CycleCount::Value(4),
-        Operation::DSB { option: _ } => CycleCount::Value(4),
-        Operation::EORReg { m: _, dn: _ } => CycleCount::Value(1),
-        Operation::ISB { option: _ } => CycleCount::Value(4),
-        Operation::LDM { n: _, reg_list } => {
-            let max_cycle = 1 + reg_list.len();
-            CycleCount::Value(max_cycle)
-        }
-        Operation::LDRImm { imm: _, n: _, t: _ } => CycleCount::Value(2),
-        Operation::LDRLiteral { t: _, imm: _ } => CycleCount::Value(2),
-        Operation::LDRReg { m: _, n: _, t: _ } => CycleCount::Value(2),
-        Operation::LDRBImm { imm: _, n: _, t: _ } => CycleCount::Value(2),
-        Operation::LDRBReg { m: _, n: _, t: _ } => CycleCount::Value(2),
-        Operation::LDRHImm { imm: _, n: _, t: _ } => CycleCount::Value(2),
-        Operation::LDRHReg { m: _, n: _, t: _ } => CycleCount::Value(2),
-        Operation::LDRSBReg { m: _, n: _, t: _ } => CycleCount::Value(2),
-        Operation::LDRSH { m: _, n: _, t: _ } => CycleCount::Value(2),
-        Operation::LSLImm { imm: _, m: _, d: _ } => CycleCount::Value(1),
-        Operation::LSLReg { m: _, dn: _ } => CycleCount::Value(1),
-        Operation::LSRImm { imm: _, m: _, d: _ } => CycleCount::Value(1),
-        Operation::LSRReg { m: _, dn: _ } => CycleCount::Value(1),
-        Operation::MOVImm { d: _, imm: _ } => CycleCount::Value(1),
-        Operation::MOVReg {
-            m: _,
-            d,
-            set_flags: _,
-        } => {
-            let max_cycle = if *d == Register::PC { 3 } else { 1 };
-            CycleCount::Value(max_cycle)
-        }
-        Operation::MRS { d: _, sysm: _ } => CycleCount::Value(4),
-        Operation::MSRReg { n: _, sysm: _ } => CycleCount::Value(4),
-        Operation::MUL { n: _, dm: _ } => {
-            CycleCount::Value(32) // Can be one depending on core implementation might be able to read this from somewhere.
-        }
-        Operation::MVNReg { m: _, d: _ } => CycleCount::Value(1),
-        Operation::NOP => CycleCount::Value(1),
-        Operation::ORRReg { m: _, dn: _ } => CycleCount::Value(1),
-        Operation::POP { reg_list } => {
-            let max_cycle = if reg_list.contains(&Register::PC) {
-                4
-            } else {
-                1
-            } + reg_list.len();
-            CycleCount::Value(max_cycle)
-        }
-        Operation::PUSH { reg_list } => CycleCount::Value(1 + reg_list.len()),
-        Operation::REV { m: _, d: _ } => CycleCount::Value(1),
-        Operation::REV16 { m: _, d: _ } => CycleCount::Value(1),
-        Operation::REVSH { m: _, d: _ } => CycleCount::Value(1),
-        Operation::RORReg { m: _, dn: _ } => CycleCount::Value(1),
-        Operation::RSBImm { n: _, d: _ } => CycleCount::Value(1),
-        Operation::SBCReg { m: _, dn: _ } => CycleCount::Value(1),
-        Operation::SEV => CycleCount::Value(1),
-        Operation::STM { n: _, reg_list } => CycleCount::Value(1 + reg_list.len()),
-        Operation::STRImm { imm: _, n: _, t: _ } => CycleCount::Value(2),
-        Operation::STRReg { m: _, n: _, t: _ } => CycleCount::Value(2),
-        Operation::STRBImm { imm: _, n: _, t: _ } => CycleCount::Value(2),
-        Operation::STRBReg { m: _, n: _, t: _ } => CycleCount::Value(2),
-        Operation::STRHImm { imm: _, n: _, t: _ } => CycleCount::Value(2),
-        Operation::STRHReg { m: _, n: _, t: _ } => CycleCount::Value(2),
-        Operation::SUBImm { imm: _, n: _, d: _ } => CycleCount::Value(1),
-        Operation::SUBReg { m: _, n: _, d: _ } => CycleCount::Value(1),
-        Operation::SUBImmSP { imm: _ } => CycleCount::Value(1),
-        Operation::SVC { imm: _ } => CycleCount::Value(0),
-        Operation::SXTB { m: _, d: _ } => CycleCount::Value(1),
-        Operation::SXTH { m: _, d: _ } => CycleCount::Value(1),
-        Operation::TSTReg { m: _, n: _ } => CycleCount::Value(1),
-        Operation::UDFT1 { imm: _ } => {
-            // generates a undefined exeption just panic for now
-            unimplemented!()
-        }
-        Operation::UDFT2 { imm: _ } => {
-            // generates a undefined exeption just panic for now
-            unimplemented!()
-        }
-        Operation::UXTB { m: _, d: _ } => CycleCount::Value(1),
-        Operation::UXTH { m: _, d: _ } => CycleCount::Value(1),
-        Operation::WFE => todo!(),
-        Operation::WFI => todo!(),
-        Operation::YIELD => todo!(),
-    }
-}
-
-impl Translatable for Instruction {
-    fn translate(&self) -> GAInstruction {
-        let operations = match &self.operation {
+impl ArmV6M {
+    pub(super) fn expand(instr: Instruction) -> GAInstruction {
+        let operations = match &instr.operation {
             Operation::ADCReg { m, n, d } => {
                 let dest = arm_register_to_ga_operand(d);
                 let mreg = arm_register_to_ga_operand(m);
@@ -408,7 +127,6 @@ impl Translatable for Instruction {
                 operand2: arm_register_to_ga_operand(m),
             }],
             Operation::ADR { d, imm } => {
-                let imm = imm;
                 vec![
                     GAOperation::Add {
                         destination: Operand::Local("addr".to_owned()),
@@ -1281,7 +999,7 @@ impl Translatable for Instruction {
                     GAOperation::Sror {
                         destination: dn.clone(),
                         operand: dn.clone(),
-                        shift: shift,
+                        shift,
                     },
                     GAOperation::SetNFlag(dn.clone()),
                     GAOperation::SetZFlag(dn.clone()),
@@ -1637,14 +1355,6 @@ impl Translatable for Instruction {
                     GAOperation::SetZFlag(result),
                 ]
             }
-            Operation::UDFT1 { imm: _ } => {
-                // generates a undefined exeption just panic for now
-                unimplemented!()
-            }
-            Operation::UDFT2 { imm: _ } => {
-                // generates a undefined exeption just panic for now
-                unimplemented!()
-            }
             Operation::UXTB { m, d } => vec![GAOperation::ZeroExtend {
                 destination: arm_register_to_ga_operand(d),
                 operand: arm_register_to_ga_operand(m),
@@ -1658,68 +1368,21 @@ impl Translatable for Instruction {
             Operation::WFE => todo!(),
             Operation::WFI => todo!(),
             Operation::YIELD => todo!(),
+            Operation::UDF { imm: _imm } => unimplemented!(),
         };
 
-        let instruction_width = match self.width {
+        let instruction_width = match instr.width {
             armv6_m_instruction_parser::instructons::InstructionWidth::Bit32 => 32,
             armv6_m_instruction_parser::instructons::InstructionWidth::Bit16 => 16,
         };
 
-        let max_cycle_count = cycle_count_m0plus_core(&self.operation);
+        let max_cycle_count = super::timing::cycle_count_m0plus_core(&instr.operation);
 
         GAInstruction {
             instruction_size: instruction_width,
-            operations: operations,
+            operations,
             max_cycle: max_cycle_count,
         }
-    }
-
-    fn add_hooks(cfg: &mut RunConfig) {
-        let symbolic_sized = |state: &mut GAState| {
-            let value_ptr = state.get_register("R0".to_owned())?;
-            let size = state.get_register("R1".to_owned())?.get_constant().unwrap() * 8;
-            trace!(
-                "trying to create symbolic: addr: {:?}, size: {}",
-                value_ptr,
-                size
-            );
-            let name = "any".to_owned() + &state.marked_symbolic.len().to_string();
-            let symb_value = state.ctx.unconstrained(size as u32, &name);
-            state.marked_symbolic.push(Variable {
-                name: Some(name),
-                value: symb_value.clone(),
-                ty: ExpressionType::Integer(size as usize),
-            });
-            state.memory.write(&value_ptr, symb_value)?;
-
-            let lr = state.get_register("LR".to_owned())?;
-            state.set_register("PC".to_owned(), lr)?;
-            Ok(())
-        };
-
-        cfg.pc_hooks.push((
-            Regex::new(r"^symbolic_size<.+>$").unwrap(),
-            PCHook::Intrinsic(symbolic_sized),
-        ));
-
-        let read_pc: RegisterReadHook = |state| {
-            let two = state.ctx.from_u64(1, 32);
-            let pc = state.get_register("PC".to_owned()).unwrap();
-            Ok(pc.add(&two))
-        };
-
-        let write_pc: RegisterWriteHook = |state, value| state.set_register("PC".to_owned(), value);
-
-        cfg.register_read_hooks.push(("PC+".to_owned(), read_pc));
-        cfg.register_write_hooks.push(("PC+".to_owned(), write_pc));
-
-        // reset allways done
-        let read_reset_done: MemoryReadHook = |state, _addr| {
-            let value = state.ctx.from_u64(0xffff_ffff, 32);
-            Ok(value)
-        };
-        cfg.memory_read_hooks
-            .push((MemoryHookAddress::Single(0x4000c008), read_reset_done));
     }
 }
 
