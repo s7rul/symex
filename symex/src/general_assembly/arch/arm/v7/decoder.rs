@@ -8,8 +8,14 @@ use general_assembly::{
 use paste::paste;
 use transpiler::pseudo;
 
-use disarmv7::prelude::{Condition as ARMCondition, ImmShift, Register, Shift, Operation as V7Operation,SetFlags,arch::set_flags::LocalUnwrap};
-use arch::set_flags::LocalUnwrap;
+use disarmv7::prelude::{
+    ImmShift,
+    Register,
+    Shift,
+    arch::set_flags::LocalUnwrap,
+    Operation as V7Operation,
+    Condition as ARMCondition
+};
 
 macro_rules! consume {
     (($($id:ident$($(.$e:expr)+)?),*) from $name:ident) => {
@@ -1844,28 +1850,19 @@ impl Convert for (usize, V7Operation) {
                             to_pop.push(reg.local_into());
                         }
                     }
-                    
-                    let print = || {
-                        Operation::Print{
-                           info: "WRITTEN PC",
-                           operand:Register::PC.local_into()
-                        }
-                    };
 
                     pseudo!([
-                            let address = Register("SP&");
-                            Register("SP") += (4*bc).local_into();
-                            for reg in to_pop.into_iter(){
-                                reg = LocalAddress(address,32);
-                                address += 4.local_into();
-                            }
-                            if (jump) {
-                                address = LocalAddress(address,32);
-                                address = address<31:1> << 1.local_into();
-                                print();
-                                Jump(address);
-                                print();
-                            }
+                        let address = Register("SP&");
+                        Register("SP") += (4*bc).local_into();
+                        for reg in to_pop.into_iter(){
+                            reg = LocalAddress(address,32);
+                            address += 4.local_into();
+                        }
+                        if (jump) {
+                            address = LocalAddress(address,32);
+                            address = address<31:1> << 1.local_into();
+                            Jump(address);
+                        }
                     ])
                 }
                 V7Operation::Push(push) => {
@@ -3546,33 +3543,4 @@ impl Into<Operand> for u32 {
 }
 fn mask_dyn(start: u32, end: u32) -> u32 {
     (1 << (end - start + 1)) - 1
-}
-
-/// Extracts the set flag option.
-///
-/// If it depends on wether we are in an IT block or not
-/// we get the result of
-/// ```ignore
-/// let set_flags = !in_it_block ^ SetFlags::InitBlock(value)
-/// ```
-pub trait LocalUnwrap {
-    /// Extracts the set flag option.
-    ///
-    /// If it depends on wether we are in an IT block or not
-    /// we get the result of
-    /// ```ignore
-    /// let set_flags = !in_it_block ^ SetFlags::InitBlock(value)
-    /// ```
-    fn local_unwrap(self, in_it_block: bool) -> bool
-    where
-        Self: Sized;
-}
-impl LocalUnwrap for Option<SetFlags> {
-    fn local_unwrap(self, in_it_block: bool) -> bool {
-        match self {
-            Some(SetFlags::Literal(b)) => b,
-            Some(SetFlags::InITBlock(b)) => (!in_it_block) ^ b,
-            None => false,
-        }
-    }
 }
