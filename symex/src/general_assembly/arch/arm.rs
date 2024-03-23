@@ -11,6 +11,7 @@ pub mod v7;
 
 use super::{Arch, ArchError, Family};
 use v6::ArmV6M;
+use v7::ArmV7EM;
 
 use object::{File, Object, ObjectSection};
 
@@ -39,14 +40,16 @@ impl Family for Arm {
         let isa = arm_isa(&section)?;
         match isa {
             ArmIsa::ArmV6M => Ok(Box::new(ArmV6M {})),
+            ArmIsa::ArmV7EM => Ok(Box::new(ArmV7EM {})),
         }
     }
 }
 
 #[non_exhaustive]
+#[allow(dead_code)]
 enum ArmIsa {
     ArmV6M,
-    // ArmV7EM,
+    ArmV7EM,
 }
 
 fn arm_isa<'a, T: ObjectSection<'a>>(section: &T) -> Result<ArmIsa, ArchError> {
@@ -63,10 +66,15 @@ fn arm_isa<'a, T: ObjectSection<'a>>(section: &T) -> Result<ArmIsa, ArchError> {
         Some(el) => Ok(el),
         None => Err(ArchError::MalformedSection),
     }?;
-    println!("{:?}", f_cpu_arch);
 
     match f_cpu_arch {
-        12 => Ok(ArmIsa::ArmV6M),
+        // 12 => Ok(ArmIsa::ArmV6M),
+        // Cortex-m3
+        // 10 => Ok(ArmIsa::ArmV7EM),
+        12 => Ok(ArmIsa::ArmV7EM),
+        // Cortex-m4
+        13 => Ok(ArmIsa::ArmV7EM),
+
         _ => Err(ArchError::UnsuportedArchitechture),
     }
 }

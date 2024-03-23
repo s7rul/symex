@@ -1,5 +1,3 @@
-[workspace]
-members = ["general_assembly"]
 [package]
 name = "symex"
 version = "0.1.0"

@@ -112,6 +112,9 @@ impl<'vm> GAExecutor<'vm> {
     // Fork execution. Will create a new path with `constraint`.
     fn fork(&mut self, constraint: DExpr) -> Result<()> {
         trace!("Save backtracking path: constraint={:?}", constraint);
+        println!("Mutliple paths detected at :{:?}",self.state.get_register("PC".to_owned()).unwrap());
+        println!("SP :{:?}",self.state.get_register("SP".to_owned()).unwrap());
+        println!("Save backtracking path: constraint={:?}", constraint);
         let forked_state = self.state.clone();
         let path = Path::new(forked_state, Some(constraint));
 
@@ -209,7 +212,10 @@ impl<'vm> GAExecutor<'vm> {
                 let address =
                     self.get_operand_value(&Operand::Local(local_name.to_owned()), local)?;
                 let address = self.resolve_address(address, local)?;
-                self.get_memory(address, *width)
+                let ret = self.get_memory(address, *width);
+
+                // println!("Read {ret:?} from address {address:?}");
+                ret
             }
             Operand::Flag(f) => {
                 let value = self.state.get_flag(f.clone());
@@ -238,7 +244,8 @@ impl<'vm> GAExecutor<'vm> {
                 let address =
                     self.get_operand_value(&Operand::Local(local_name.to_owned()), local)?;
                 let address = self.resolve_address(address, local)?;
-                self.set_memory(value, address, *width)?;
+                self.set_memory(value.clone(), address, *width)?;
+                // println!("Wrote {value:?} to address {address:?}");
             }
             Operand::Address(address, width) => {
                 let address = self.get_dexpr_from_dataword(*address);
@@ -406,7 +413,7 @@ impl<'vm> GAExecutor<'vm> {
                 source,
             } => {
                 let value = self.get_operand_value(source, local)?;
-                self.set_operand_value(destination, value, local)?;
+                self.set_operand_value(destination, value.clone(), local)?;
             }
             Operation::Add {
                 destination,

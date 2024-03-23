@@ -1,5 +1,5 @@
 use disarmv7::prelude::{Condition, Operation as V7Operation,Register};
-use general_assembly::operation::Operation;
+// use general_assembly::operation::Operation;
 
 use crate::general_assembly::{instruction::CycleCount, state::GAState};
 impl super::ArmV7EM {
@@ -129,25 +129,25 @@ impl super::ArmV7EM {
             V7Operation::B(b) => {
                 if b.condition != Condition::None {
                     let counter = |state: &GAState| {
-                        match (state.get_next_instruction(), state.get_has_jumped()) {
-                            (
-                                Ok(crate::general_assembly::state::HookOrInstruction::Instruction(
-                                    instr,
-                                )),
-                                true,
-                            ) => {
-                                let ops = instr.operations.len();
-                                match (ops, instr.operations.get(0)) {
-                                    (1, Some(Operation::Nop)) => {
-                                        return 2;
-                                    }
-                                    _ => {}
-                                }
-                            }
-
-                            _ => {}
-                        }
-
+                        // match (state.get_next_instruction(), state.get_has_jumped()) {
+                        //     (
+                        //         Ok(crate::general_assembly::state::HookOrInstruction::Instruction(
+                        //             instr,
+                        //         )),
+                        //         true,
+                        //     ) => {
+                        //         let ops = instr.operations.len();
+                        //         match (ops, instr.operations.get(0)) {
+                        //             (1, Some(Operation::Nop)) => {
+                        //                 return 2;
+                        //             }
+                        //             _ => {}
+                        //         }
+                        //     }
+                        //
+                        //     _ => {}
+                        // }
+                        //
                         match state.get_has_jumped() {
                             true => 1 + 3,
                             false => 1,

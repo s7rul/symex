@@ -493,20 +493,39 @@ impl Convert for (usize, V7Operation) {
                     let imm = imm.local_into();
                     
                     pseudo!([
-                            let next_instr_addr = Register("PC+");
+                            let next_instr_addr = Register("PC");
                             Register("LR") = next_instr_addr<31:1> << 1.local_into();
                             Register("LR") |= 0b1.local_into();
                             next_instr_addr = Register("PC+") + imm;
                             next_instr_addr = next_instr_addr<31:1> << 1.local_into();
-                            Jump(next_instr_addr);
-                    ])
+                            Register("PC") = next_instr_addr;
+                    ]);
+                    vec![
+                        Operation::Move {
+                            destination: Operand::Local("PC".to_owned()),
+                            source: Operand::Register("PC".to_owned()),
+                        },
+                        Operation::Move {
+                            destination: Operand::Register("LR".to_owned()),
+                            source: Operand::Local("PC".to_owned()),
+                        },
+                        Operation::Add {
+                            destination: Operand::Local("newPC".to_owned()),
+                            operand1: Operand::Local("PC".to_owned()),
+                            operand2: imm,
+                        },
+                        Operation::Move {
+                            destination: Operand::Register("PC".to_owned()),
+                            source: Operand::Local("newPC".to_owned()),
+                        },
+                    ]
                 }
                 V7Operation::Blx(blx) => {
                     consume!((rm) from blx);
                     let rm = rm.local_into();
                     pseudo!([
                         let target = rm;
-                        let next_instr_addr = Register("PC+") - 2.local_into();
+                        let next_instr_addr = Register("PC") - 2.local_into();
                         Register("LR") = next_instr_addr<31:1> << 1.local_into();
                         Register("LR") |= 1.local_into();
                         Register("EPSR") = Register("EPSR") | (1 << 27).local_into();

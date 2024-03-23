@@ -351,6 +351,7 @@ impl Project {
     /// Get the instruction att a address
     pub fn get_instruction(&self, address: u64, state: &GAState) -> Result<Instruction> {
         trace!("Reading instruction from address: {:#010X}", address);
+        // println!("Reading instruction from address: {:#010X}", address);
         match self.get_raw_word(address)? {
             RawDataWord::Word64(d) => self.instruction_from_array_ptr(&d, state),
             RawDataWord::Word32(d) => self.instruction_from_array_ptr(&d, state),
@@ -360,6 +361,7 @@ impl Project {
     }
 
     fn instruction_from_array_ptr(&self, data: &[u8], state: &GAState) -> Result<Instruction> {
+        // println!("Decoding : {data:?}");
         Ok(self.architecture.translate(data, state)?)
     }
 

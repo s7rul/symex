@@ -576,7 +576,7 @@ impl ArmV6M {
                 GAOperation::SignExtend {
                     destination: arm_register_to_ga_operand(t),
                     operand: arm_register_to_ga_operand(t),
-                    bits: 8,
+                    bits: 16,
                 },
             ],
             Operation::LSLImm { imm, m, d } => vec![
