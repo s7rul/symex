@@ -18,6 +18,7 @@ use crate::general_assembly::instruction::Instruction as GAInstruction;
 impl ArmV6M {
     pub(super) fn expand(instr: Instruction) -> GAInstruction {
         let operations = match &instr.operation {
+            Operation::UDF { .. } => todo!(),
             Operation::ADCReg { m, n, d } => {
                 let dest = arm_register_to_ga_operand(d);
                 let mreg = arm_register_to_ga_operand(m);
@@ -125,6 +126,7 @@ impl ArmV6M {
                 operand2: arm_register_to_ga_operand(m),
             }],
             Operation::ADR { d, imm } => {
+                let imm = imm;
                 vec![
                     GAOperation::Add {
                         destination: Operand::Local("addr".to_owned()),
@@ -574,7 +576,7 @@ impl ArmV6M {
                 GAOperation::SignExtend {
                     destination: arm_register_to_ga_operand(t),
                     operand: arm_register_to_ga_operand(t),
-                    bits: 16,
+                    bits: 8,
                 },
             ],
             Operation::LSLImm { imm, m, d } => vec![
@@ -585,12 +587,7 @@ impl ArmV6M {
                 },
                 GAOperation::SetNFlag(arm_register_to_ga_operand(d)),
                 GAOperation::SetZFlag(arm_register_to_ga_operand(d)),
-                GAOperation::SetCFlagShiftLeft {
-                    operand: arm_register_to_ga_operand(d),
-                    shift: Operand::Immidiate(DataWord::Word32(*imm)),
-                },
             ],
-            //TODO! Add carry flag for all of the shift operations.
             Operation::LSLReg { m, dn } => vec![
                 GAOperation::And {
                     destination: Operand::Local("shift".to_owned()),
@@ -1359,6 +1356,14 @@ impl ArmV6M {
                     GAOperation::SetZFlag(result),
                 ]
             }
+            // Operation::UDFT1 { imm: _ } => {
+            // generates a undefined exeption just panic for now
+            // unimplemented!()
+            // }
+            // Operation::UDFT2 { imm: _ } => {
+            // generates a undefined exeption just panic for now
+            // unimplemented!()
+            // }
             Operation::UXTB { m, d } => vec![GAOperation::ZeroExtend {
                 destination: arm_register_to_ga_operand(d),
                 operand: arm_register_to_ga_operand(m),
@@ -1372,7 +1377,6 @@ impl ArmV6M {
             Operation::WFE => todo!(),
             Operation::WFI => todo!(),
             Operation::YIELD => todo!(),
-            Operation::UDF { imm: _imm } => unimplemented!(),
         };
 
         let instruction_width = match instr.width {

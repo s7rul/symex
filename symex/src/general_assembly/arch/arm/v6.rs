@@ -60,13 +60,7 @@ impl Arch for ArmV6M {
             Ok(pc.add(&two))
         };
 
-        // Last bit of the PC is allways 0.
-        let write_pc: RegisterWriteHook = |state, value| {
-            state.set_register(
-                "PC".to_owned(),
-                value.and(&state.ctx.from_u64((u32::MAX - 1) as u64, 32)),
-            )
-        };
+        let write_pc: RegisterWriteHook = |state, value| state.set_register("PC".to_owned(), value);
 
         cfg.register_read_hooks.push(("PC+".to_owned(), read_pc));
         cfg.register_write_hooks.push(("PC+".to_owned(), write_pc));
@@ -89,7 +83,7 @@ impl Arch for ArmV6M {
 
 impl Display for ArmV6M {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f,"ARMv6-M")
+        write!(f, "ARMv6-M")
     }
 }
 
