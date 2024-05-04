@@ -9,11 +9,13 @@
 pub mod v6;
 pub mod v7;
 
-use super::{Arch, ArchError, Family};
+use std::fmt::Display;
+
+use object::{File, Object, ObjectSection};
 use v6::ArmV6M;
 use v7::ArmV7EM;
 
-use object::{File, Object, ObjectSection};
+use super::{Arch, ArchError, Family};
 
 /// Type level abstraction that serves as a constructor
 ///
@@ -45,6 +47,12 @@ impl Family for Arm {
     }
 }
 
+impl Display for Arm {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "Generic ARM architecture")
+    }
+}
+
 #[non_exhaustive]
 #[allow(dead_code)]
 enum ArmIsa {
@@ -68,10 +76,11 @@ fn arm_isa<'a, T: ObjectSection<'a>>(section: &T) -> Result<ArmIsa, ArchError> {
     }?;
 
     match f_cpu_arch {
-        // 12 => Ok(ArmIsa::ArmV6M),
-        // Cortex-m3
-        // 10 => Ok(ArmIsa::ArmV7EM),
-        12 => Ok(ArmIsa::ArmV7EM),
+        // Cortex-m3, this should really be Arvm7M.
+        10 => Ok(ArmIsa::ArmV7EM),
+
+        12 => Ok(ArmIsa::ArmV6M),
+
         // Cortex-m4
         13 => Ok(ArmIsa::ArmV7EM),
 
