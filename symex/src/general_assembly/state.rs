@@ -2,21 +2,20 @@
 
 use std::collections::{HashMap, VecDeque};
 
+use general_assembly::{condition::Condition, operand::DataWord};
 use tracing::{debug, trace};
 
+use super::{instruction::Instruction, project::Project};
 use crate::{
     elf_util::{ExpressionType, Variable},
     general_assembly::{
         project::{PCHook, ProjectError},
-        GAError, Result,
+        GAError,
+        Result,
     },
     memory::ArrayMemory,
     smt::{DContext, DExpr, DSolver},
 };
-
-use super::{instruction::Instruction, project::Project};
-
-use general_assembly::condition::Condition;
 
 pub enum HookOrInstruction {
     PcHook(PCHook),
@@ -124,7 +123,8 @@ impl GAState {
         self.has_jumped = true;
     }
 
-    /// Indicates if the last executed instruction was a conditional branch that branched.
+    /// Indicates if the last executed instruction was a conditional branch that
+    /// branched.
     pub fn get_has_jumped(&self) -> bool {
         self.has_jumped
     }
@@ -149,7 +149,8 @@ impl GAState {
         !self.instruction_conditions.is_empty()
     }
 
-    /// Increment the cycle counter with the cycle count of the last instruction.
+    /// Increment the cycle counter with the cycle count of the last
+    /// instruction.
     pub fn increment_cycle_count(&mut self) {
         // do nothing if cycles should not be counted
         if !self.count_cycles {
@@ -244,7 +245,10 @@ impl GAState {
         // crude solution should prbobly change
         if register == "PC" {
             let value = match expr.get_constant() {
-                Some(v) => v,
+                Some(v) => {
+                    // assert!(v % 4 == 0);
+                    v
+                }
                 None => {
                     trace!("not a concrete pc try to generate possible values");
                     let values: Vec<u64> = match self.constraints.get_values(&expr, 500).unwrap() {
@@ -304,6 +308,7 @@ impl GAState {
 
     /// Set the value of a flag.
     pub fn set_flag(&mut self, flag: String, expr: DExpr) {
+        let expr = expr.simplify().simplify();
         trace!("flag {} set to {:?}", flag, expr);
         self.flags.insert(flag, expr);
     }
@@ -389,18 +394,10 @@ impl GAState {
                 if self.project.address_in_range(address_const) {
                     // read from static memmory in project
                     let value = match self.project.get_word(address_const)? {
-                        crate::general_assembly::DataWord::Word64(data) => {
-                            self.ctx.from_u64(data, 64)
-                        }
-                        crate::general_assembly::DataWord::Word32(data) => {
-                            self.ctx.from_u64(data as u64, 32)
-                        }
-                        crate::general_assembly::DataWord::Word16(data) => {
-                            self.ctx.from_u64(data as u64, 16)
-                        }
-                        crate::general_assembly::DataWord::Word8(data) => {
-                            self.ctx.from_u64(data as u64, 8)
-                        }
+                        DataWord::Word64(data) => self.ctx.from_u64(data, 64),
+                        DataWord::Word32(data) => self.ctx.from_u64(data as u64, 32),
+                        DataWord::Word16(data) => self.ctx.from_u64(data as u64, 16),
+                        DataWord::Word8(data) => self.ctx.from_u64(data as u64, 8),
                     };
                     Ok(value)
                 } else {

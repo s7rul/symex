@@ -1,31 +1,31 @@
-use crate::elf_util::{ExpressionType, Variable};
-use crate::general_assembly::arch::{Arch, ArchError, ParseError};
-use crate::general_assembly::instruction::Instruction;
-use crate::general_assembly::project::{
-    MemoryHookAddress, MemoryReadHook, PCHook, RegisterReadHook, RegisterWriteHook,
-};
-use crate::general_assembly::run_config::RunConfig;
-use crate::general_assembly::state::GAState;
-use general_assembly::operation::Operation;
+use std::fmt::Display;
 
 use decoder::Convert;
-use disarmv7::prelude::Operation as V7Operation;
-use disarmv7::prelude::*;
+use disarmv7::prelude::{Operation as V7Operation, *};
+use general_assembly::operation::Operation;
 use regex::Regex;
+
+use crate::{
+    elf_util::{ExpressionType, Variable},
+    general_assembly::{
+        arch::{Arch, ArchError, ParseError},
+        instruction::Instruction,
+        project::{MemoryHookAddress, MemoryReadHook, PCHook, RegisterReadHook, RegisterWriteHook},
+        run_config::RunConfig,
+        state::GAState,
+    },
+};
 
 #[rustfmt::skip]
 pub mod decoder;
+pub mod compare;
+#[cfg(test)]
+pub mod test;
 pub mod timing;
 
 /// Type level denotation for the Armv7-EM ISA.
-#[derive(Debug)]
+#[derive(Debug, Default)]
 pub struct ArmV7EM {}
-
-impl Default for ArmV7EM {
-    fn default() -> Self {
-        Self {}
-    }
-}
 
 impl Arch for ArmV7EM {
     fn add_hooks(&self, cfg: &mut RunConfig) {
@@ -50,13 +50,21 @@ impl Arch for ArmV7EM {
             Regex::new(r"^symbolic_size<.+>$").unwrap(),
             PCHook::Intrinsic(symbolic_sized),
         ));
+        // §B1.4 Specifies that R[15] => Addr(Current instruction) + 4
+        //
+        // This can be translated in to
+        //
+        // PC - Size(prev instruction) / 8 + 4
+        // as PC points to the next instruction, we
+        //
+        //
+        // Or we can simply take the previous PC + 4.
         let read_pc: RegisterReadHook = |state| {
-            let pc = state.get_register("PC".to_owned()).unwrap();
-            // let pc = pc.simplify();
-            let size = state.current_instruction.clone().unwrap().instruction_size;
-            let two = state.ctx.from_u64((size as u64) / 8u64, 32);
-            let four = state.ctx.from_u64(4, 32);
-            Ok(pc.sub(&two).add(&four).simplify())
+            let new_pc = state
+                .ctx
+                .from_u64(state.last_pc + 4, state.project.get_word_size())
+                .simplify();
+            Ok(new_pc)
         };
 
         let read_sp: RegisterReadHook = |state| {
@@ -70,8 +78,11 @@ impl Arch for ArmV7EM {
         let write_sp: RegisterWriteHook = |state, value| {
             state.set_register(
                 "SP".to_owned(),
-                value, /* .and(&state.ctx.from_u64((!(0b11u32)) as u64, 32)) */
-            )
+                value.and(&state.ctx.from_u64((!(0b11u32)) as u64, 32)),
+            )?;
+            let sp = state.get_register("SP".to_owned()).unwrap();
+            let sp = sp.simplify();
+            state.set_register("SP".to_owned(), sp)
         };
 
         cfg.register_read_hooks.push(("PC+".to_owned(), read_pc));
@@ -90,10 +101,11 @@ impl Arch for ArmV7EM {
 
     fn translate(&self, buff: &[u8], state: &GAState) -> Result<Instruction, ArchError> {
         let mut buff: disarmv7::buffer::PeekableBuffer<u8, _> = buff.iter().cloned().into();
+
         let instr = V7Operation::parse(&mut buff).map_err(|e| ArchError::ParsingError(e.into()))?;
         let timing = Self::cycle_count_m4_core(&instr.1);
-        // println!("instr : {instr:?} takes @ {timing:?}");
         let ops: Vec<Operation> = instr.clone().convert(state.get_in_conditional_block());
+
         Ok(Instruction {
             instruction_size: instr.0 as u32,
             operations: ops,
@@ -103,11 +115,41 @@ impl Arch for ArmV7EM {
     }
 }
 
+impl Display for ArmV7EM {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "ARMv7-M")
+    }
+}
+
 impl From<disarmv7::ParseError> for ParseError {
     fn from(value: disarmv7::ParseError) -> Self {
-        println!("Err: {value:?}");
         match value {
-            _ => todo!(),
+            disarmv7::ParseError::Undefined => ParseError::InvalidInstruction,
+            disarmv7::ParseError::ArchError(aerr) => match aerr {
+                disarmv7::prelude::arch::ArchError::InvalidCondition => {
+                    ParseError::InvalidCondition
+                }
+                disarmv7::prelude::arch::ArchError::InvalidRegister(_) => {
+                    ParseError::InvalidRegister
+                }
+                disarmv7::prelude::arch::ArchError::InvalidField(_) => {
+                    ParseError::MalfromedInstruction
+                }
+            },
+            disarmv7::ParseError::Unpredictable => ParseError::Unpredictable,
+            disarmv7::ParseError::Invalid16Bit(_) | disarmv7::ParseError::Invalid32Bit(_) => {
+                ParseError::InvalidInstruction
+            }
+            disarmv7::ParseError::InvalidField(_) => ParseError::MalfromedInstruction,
+            disarmv7::ParseError::Incomplete32Bit => ParseError::InsufficientInput,
+            disarmv7::ParseError::InternalError(info) => ParseError::Generic(info),
+            disarmv7::ParseError::IncompleteParser => {
+                ParseError::Generic("Encountered instruction that is not yet supported.")
+            }
+            disarmv7::ParseError::InvalidCondition => ParseError::InvalidCondition,
+            disarmv7::ParseError::IncompleteProgram => ParseError::InsufficientInput,
+            disarmv7::ParseError::InvalidRegister(_) => ParseError::InvalidRegister,
+            disarmv7::ParseError::PartiallyParsed(error, _) => (*error).into(),
         }
     }
 }

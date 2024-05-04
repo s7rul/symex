@@ -1,6 +1,6 @@
-use disarmv7::prelude::{Condition, Operation as V7Operation,Register};
-// use general_assembly::operation::Operation;
+use disarmv7::prelude::{Condition, Operation as V7Operation, Register};
 
+// use general_assembly::operation::Operation;
 use crate::general_assembly::{instruction::CycleCount, state::GAState};
 impl super::ArmV7EM {
     pub fn memory_access(instr: &V7Operation) -> bool {
@@ -179,7 +179,8 @@ impl super::ArmV7EM {
             V7Operation::CmpImmediate(_) | V7Operation::CmpRegister(_) => CycleCount::Value(1),
             V7Operation::Cps(_) => CycleCount::Value(2),
             V7Operation::Dbg(_) => CycleCount::Value(1),
-            V7Operation::Dmb(_) => CycleCount::Value(1), /* todo!("This requires a model of barriers") */
+            V7Operation::Dmb(_) => CycleCount::Value(1), /* todo!("This requires a model of */
+            // barriers")
             V7Operation::Dsb(_) => todo!("This requires a model of barriers"),
             V7Operation::EorImmediate(_) | V7Operation::EorRegister(_) => CycleCount::Value(1),
             V7Operation::Isb(_) => todo!("This requires a model of barriers"),
@@ -253,7 +254,7 @@ impl super::ArmV7EM {
             | V7Operation::LdrshLiteral(_)
             | V7Operation::LdrshRegister(_)
             | V7Operation::Ldrsht(_)
-            | V7Operation::Ldrt(_) => CycleCount::Function(pipeline.clone()),
+            | V7Operation::Ldrt(_) => CycleCount::Function(pipeline),
             V7Operation::LslImmediate(_) | V7Operation::LslRegister(_) => CycleCount::Value(1),
             V7Operation::LsrImmediate(_) | V7Operation::LsrRegister(_) => CycleCount::Value(1),
             V7Operation::Mla(_) | V7Operation::Mls(_) => CycleCount::Value(2),
@@ -348,10 +349,10 @@ impl super::ArmV7EM {
             V7Operation::Stm(stm) => CycleCount::Value(1 + stm.registers.registers.len()),
             V7Operation::Stmdb(stm) => CycleCount::Value(1 + stm.registers.registers.len()),
             V7Operation::StrImmediate(_) | V7Operation::StrRegister(_) => {
-                CycleCount::Function(pipeline.clone())
+                CycleCount::Function(pipeline)
             }
             V7Operation::StrbImmediate(_) | V7Operation::StrbRegister(_) => {
-                CycleCount::Function(pipeline.clone())
+                CycleCount::Function(pipeline)
             }
             V7Operation::Strbt(_) => CycleCount::Value(2),
             // N is two here
@@ -362,7 +363,7 @@ impl super::ArmV7EM {
             V7Operation::StrhImmediate(_)
             | V7Operation::StrhRegister(_)
             | V7Operation::Strht(_)
-            | V7Operation::Strt(_) => CycleCount::Function(pipeline.clone()),
+            | V7Operation::Strt(_) => CycleCount::Function(pipeline),
             V7Operation::SubImmediate(_) | V7Operation::SubRegister(_) => CycleCount::Value(1),
             V7Operation::SubSpMinusImmediate(_) => CycleCount::Value(1),
             V7Operation::SubSpMinusRegister(_) => CycleCount::Value(1),
@@ -431,5 +432,3 @@ impl super::ArmV7EM {
         }
     }
 }
-
-

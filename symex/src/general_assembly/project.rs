@@ -1,20 +1,24 @@
 use std::{collections::HashMap, fmt::Debug, fs};
 
+use general_assembly::operand::{DataHalfWord, DataWord, RawDataWord};
 use gimli::{DebugAbbrev, DebugInfo, DebugStr};
 use object::{Architecture, Object, ObjectSection, ObjectSymbol};
 use tracing::{debug, trace};
 
+use self::segments::Segments;
+use super::{
+    arch::ArchError,
+    instruction::Instruction,
+    state::GAState,
+    Endianness,
+    Result as SuperResult,
+    RunConfig,
+    WordSize,
+};
 use crate::{
     general_assembly::arch::{arch_from_family, arm::Arm, Arch},
     memory::MemoryError,
     smt::DExpr,
-};
-
-use self::segments::Segments;
-
-use super::{
-    arch::ArchError, instruction::Instruction, state::GAState, DataHalfWord, DataWord, Endianness,
-    RawDataWord, Result as SuperResult, RunConfig, WordSize,
 };
 
 mod dwarf_helper;
@@ -183,6 +187,34 @@ impl Project {
         }
     }
 
+    #[cfg(test)]
+    pub fn add_hooks(&mut self) {
+        let mut cfg = RunConfig {
+            memory_read_hooks: Vec::new(),
+            memory_write_hooks: Vec::new(),
+            pc_hooks: Vec::new(),
+            register_read_hooks: Vec::new(),
+            register_write_hooks: Vec::new(),
+            show_path_results: false,
+        };
+        self.architecture.add_hooks(&mut cfg);
+
+        let reg_read_hooks = construct_register_read_hooks(cfg.register_read_hooks.clone());
+        let reg_write_hooks = construct_register_write_hooks(cfg.register_write_hooks.clone());
+
+        let (single_memory_write_hooks, range_memory_write_hooks) =
+            construct_memory_write(cfg.memory_write_hooks.clone());
+        let (single_memory_read_hooks, range_memory_read_hooks) =
+            construct_memory_read_hooks(cfg.memory_read_hooks.clone());
+
+        self.reg_read_hooks = reg_read_hooks;
+        self.reg_write_hooks = reg_write_hooks;
+        self.single_memory_read_hooks = single_memory_read_hooks;
+        self.range_memory_read_hooks = range_memory_read_hooks;
+        self.single_memory_write_hooks = single_memory_write_hooks;
+        self.range_memory_write_hooks = range_memory_write_hooks;
+    }
+
     pub fn from_path(path: &str, cfg: &mut RunConfig) -> Result<Self> {
         debug!("Parsing elf file: {}", path);
         let file = fs::read(path).expect("Unable to open file.");
@@ -244,6 +276,7 @@ impl Project {
             _ => todo!(),
         }
         .unwrap();
+        trace!("Running for Architecture {}", architecture);
         architecture.add_hooks(cfg);
         let pc_hooks = cfg.pc_hooks.clone();
 
@@ -351,7 +384,6 @@ impl Project {
     /// Get the instruction att a address
     pub fn get_instruction(&self, address: u64, state: &GAState) -> Result<Instruction> {
         trace!("Reading instruction from address: {:#010X}", address);
-        // println!("Reading instruction from address: {:#010X}", address);
         match self.get_raw_word(address)? {
             RawDataWord::Word64(d) => self.instruction_from_array_ptr(&d, state),
             RawDataWord::Word32(d) => self.instruction_from_array_ptr(&d, state),
@@ -361,7 +393,6 @@ impl Project {
     }
 
     fn instruction_from_array_ptr(&self, data: &[u8], state: &GAState) -> Result<Instruction> {
-        // println!("Decoding : {data:?}");
         Ok(self.architecture.translate(data, state)?)
     }
 

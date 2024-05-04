@@ -6,16 +6,14 @@ use armv6_m_instruction_parser::{
     instructons::{Instruction, Operation},
     registers::{Register, SpecialRegister},
 };
-
 use general_assembly::{
     condition::Condition,
     operand::{DataWord, Operand},
     operation::Operation as GAOperation,
 };
 
-use crate::general_assembly::instruction::Instruction as GAInstruction;
-
 use super::ArmV6M;
+use crate::general_assembly::instruction::Instruction as GAInstruction;
 
 impl ArmV6M {
     pub(super) fn expand(instr: Instruction) -> GAInstruction {
@@ -587,7 +585,12 @@ impl ArmV6M {
                 },
                 GAOperation::SetNFlag(arm_register_to_ga_operand(d)),
                 GAOperation::SetZFlag(arm_register_to_ga_operand(d)),
+                GAOperation::SetCFlagShiftLeft {
+                    operand: arm_register_to_ga_operand(d),
+                    shift: Operand::Immidiate(DataWord::Word32(*imm)),
+                },
             ],
+            //TODO! Add carry flag for all of the shift operations.
             Operation::LSLReg { m, dn } => vec![
                 GAOperation::And {
                     destination: Operand::Local("shift".to_owned()),
@@ -1075,7 +1078,8 @@ impl ArmV6M {
                 ]
             }
             Operation::SEV => {
-                // sends a hint event to all cores, multicore is not modeled so do nothing for now
+                // sends a hint event to all cores, multicore is not modeled so do nothing for
+                // now
                 vec![]
             }
             Operation::STM { n, reg_list } => {

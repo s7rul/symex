@@ -2,18 +2,12 @@
 
 use std::collections::HashMap;
 
-use tracing::{debug, trace};
-
-use crate::{
-    general_assembly::{path_selection::Path, state::HookOrInstruction},
-    smt::{smt_boolector::BoolectorSolverContext, DExpr, SolverError},
-};
-
 use general_assembly::{
     operand::{DataWord, Operand},
     operation::Operation,
     shift::Shift,
 };
+use tracing::{debug, trace};
 
 use super::{
     instruction::Instruction,
@@ -21,6 +15,10 @@ use super::{
     state::{ContinueInsideInstruction, GAState},
     vm::VM,
     Result,
+};
+use crate::{
+    general_assembly::{path_selection::Path, state::HookOrInstruction},
+    smt::{smt_boolector::BoolectorSolverContext, DExpr, SolverError},
 };
 
 pub struct GAExecutor<'vm> {
@@ -112,9 +110,6 @@ impl<'vm> GAExecutor<'vm> {
     // Fork execution. Will create a new path with `constraint`.
     fn fork(&mut self, constraint: DExpr) -> Result<()> {
         trace!("Save backtracking path: constraint={:?}", constraint);
-        println!("Mutliple paths detected at :{:?}",self.state.get_register("PC".to_owned()).unwrap());
-        println!("SP :{:?}",self.state.get_register("SP".to_owned()).unwrap());
-        println!("Save backtracking path: constraint={:?}", constraint);
         let forked_state = self.state.clone();
         let path = Path::new(forked_state, Some(constraint));
 
@@ -132,7 +127,8 @@ impl<'vm> GAExecutor<'vm> {
         }
     }
 
-    /// Retrieves a smt expression representing value stored at `address` in memory.
+    /// Retrieves a smt expression representing value stored at `address` in
+    /// memory.
     fn get_memory(&mut self, address: u64, bits: u32) -> Result<DExpr> {
         trace!("Getting memmory addr: {:?}", address);
         // check for hook and return early
@@ -183,18 +179,18 @@ impl<'vm> GAExecutor<'vm> {
                 .from_u64(address, self.project.get_ptr_size());
             self.state
                 .memory
-                .write(&symbolic_address, data.resize_unsigned(bits))?;
+                .write(&symbolic_address, data.resize_unsigned(bits).simplify())?;
             Ok(())
         }
     }
 
     /// Get the smt expression for a operand.
-    fn get_operand_value(
+    pub(crate) fn get_operand_value(
         &mut self,
         operand: &Operand,
         local: &HashMap<String, DExpr>,
     ) -> Result<DExpr> {
-        match operand {
+        let ret = match operand {
             Operand::Register(name) => Ok(self.state.get_register(name.to_owned())?),
             Operand::Immidiate(v) => Ok(self.get_dexpr_from_dataword(v.to_owned())),
             Operand::Address(address, width) => {
@@ -212,10 +208,7 @@ impl<'vm> GAExecutor<'vm> {
                 let address =
                     self.get_operand_value(&Operand::Local(local_name.to_owned()), local)?;
                 let address = self.resolve_address(address, local)?;
-                let ret = self.get_memory(address, *width);
-
-                // println!("Read {ret:?} from address {address:?}");
-                ret
+                self.get_memory(address, *width)
             }
             Operand::Flag(f) => {
                 let value = self.state.get_flag(f.clone());
@@ -224,11 +217,13 @@ impl<'vm> GAExecutor<'vm> {
                     None => todo!(),
                 }
             }
-        }
+        };
+
+        ret
     }
 
     /// Sets what the operand represents to `value`.
-    fn set_operand_value(
+    pub(crate) fn set_operand_value(
         &mut self,
         operand: &Operand,
         value: DExpr,
@@ -244,13 +239,12 @@ impl<'vm> GAExecutor<'vm> {
                 let address =
                     self.get_operand_value(&Operand::Local(local_name.to_owned()), local)?;
                 let address = self.resolve_address(address, local)?;
-                self.set_memory(value.clone(), address, *width)?;
-                // println!("Wrote {value:?} to address {address:?}");
+                self.set_memory(value.simplify(), address, *width)?;
             }
             Operand::Address(address, width) => {
                 let address = self.get_dexpr_from_dataword(*address);
                 let address = self.resolve_address(address, local)?;
-                self.set_memory(value, address, *width)?;
+                self.set_memory(value.simplify(), address, *width)?;
             }
             Operand::AddressWithOffset {
                 address: _,
@@ -264,7 +258,8 @@ impl<'vm> GAExecutor<'vm> {
                 // TODO!
                 //
                 // Might be a good thing to throw an error here if the value is not 0 or 1.
-                self.state.set_flag(f.clone(), value.resize_unsigned(1));
+                self.state
+                    .set_flag(f.clone(), value.resize_unsigned(1).simplify());
             }
         }
         Ok(())
@@ -343,7 +338,7 @@ impl<'vm> GAExecutor<'vm> {
     }
 
     /// Execute a single instruction.
-    fn execute_instruction(&mut self, i: &Instruction) -> Result<()> {
+    pub(crate) fn execute_instruction(&mut self, i: &Instruction) -> Result<()> {
         // update last pc
         let new_pc = self.state.get_register("PC".to_owned())?;
         self.state.last_pc = new_pc.get_constant().unwrap();
@@ -399,8 +394,9 @@ impl<'vm> GAExecutor<'vm> {
         Ok(())
     }
 
-    /// Execute a single operation or all operations contained inside a operation.
-    fn execute_operation(
+    /// Execute a single operation or all operations contained inside a
+    /// operation.
+    pub(crate) fn execute_operation(
         &mut self,
         operation: &Operation,
         local: &mut HashMap<String, DExpr>,
@@ -412,7 +408,7 @@ impl<'vm> GAExecutor<'vm> {
                 destination,
                 source,
             } => {
-                let value = self.get_operand_value(source, local)?;
+                let value = self.get_operand_value(source, local)?.simplify();
                 self.set_operand_value(destination, value.clone(), local)?;
             }
             Operation::Add {
@@ -535,7 +531,7 @@ impl<'vm> GAExecutor<'vm> {
                         );
                         value
                             .srl(&shift_amount)
-                            .or(&value.srl(&word_size).sub(&shift_amount))
+                            .or(&value.srl(&word_size.sub(&shift_amount)))
                     }
                 };
                 self.set_operand_value(destination, result, local)?;
@@ -581,7 +577,7 @@ impl<'vm> GAExecutor<'vm> {
                 );
                 let value = self.get_operand_value(operand, local)?;
                 let shift = self.get_operand_value(shift, local)?.srem(&word_size);
-                let result = value.srl(&shift).or(&value.srl(&word_size).sub(&shift));
+                let result = value.srl(&shift).or(&value.sll(&word_size.sub(&shift)));
                 self.set_operand_value(destination, result, local)?;
             }
             Operation::ConditionalJump {
@@ -642,7 +638,7 @@ impl<'vm> GAExecutor<'vm> {
                         self.state.set_has_jumped();
                         Ok(dest_value)
                     }
-                    (false, true) => Ok(self.state.get_register("PC".to_owned())?), // safe to asume PC exist
+                    (false, true) => Ok(self.state.get_register("PC".to_owned())?), /* safe to asume PC exist */
                     (false, false) => Err(SolverError::Unsat),
                 }?;
 
@@ -677,7 +673,8 @@ impl<'vm> GAExecutor<'vm> {
 
                 let result = match (sub, carry) {
                     (true, true) => {
-                        // I do not now if this part is used in any ISA but it is here for completeness.
+                        // I do not now if this part is used in any ISA but it is here for
+                        // completeness.
                         let carry_in = self.state.get_flag("C".to_owned()).unwrap();
                         let op2 = op2.not();
 
@@ -695,8 +692,9 @@ impl<'vm> GAExecutor<'vm> {
                         .or(&c2)
                     }
                     (true, false) => {
-                        add_with_carry(&op1, &op2.not(), &one, self.project.get_word_size())
-                            .carry_out
+                        let lhs = op1;
+                        let rhs = op2.not();
+                        add_with_carry(&lhs, &rhs, &one, self.project.get_word_size()).carry_out
                     }
                     (false, true) => {
                         let carry_in = self.state.get_flag("C".to_owned()).unwrap();
@@ -930,7 +928,8 @@ fn count_leading_zeroes(input: &DExpr, ctx: &BoolectorSolverContext, word_size: 
     count
 }
 
-/// Does a add with carry and returns result, carry out and overflow like a hw adder.
+/// Does a add with carry and returns result, carry out and overflow like a hw
+/// adder.
 fn add_with_carry(
     op1: &DExpr,
     op2: &DExpr,
@@ -954,6 +953,9 @@ fn add_with_carry(
 mod test {
     use std::collections::HashMap;
 
+    use general_assembly::{condition::Condition, operand::{DataWord, Operand}, operation::Operation};
+
+    use super::{count_leading_ones, count_ones, count_zeroes};
     use crate::{
         general_assembly::{
             arch::arm::v6::ArmV6M,
@@ -962,14 +964,11 @@ mod test {
             project::Project,
             state::GAState,
             vm::VM,
-            DataWord, Endianness, WordSize,
+            Endianness,
+            WordSize,
         },
         smt::{DContext, DSolver},
     };
-
-    use general_assembly::{condition::Condition, operand::Operand, operation::Operation};
-
-    use super::{count_leading_ones, count_ones, count_zeroes};
 
     #[test]
     fn test_count_ones_concrete() {
@@ -1584,7 +1583,7 @@ mod test {
                 instruction_size: 32,
                 operations: vec![Operation::SetZFlag(imm_0.clone())],
                 max_cycle: CycleCount::Value(0),
-                memory_access:false,
+                memory_access: false,
             },
             Instruction {
                 instruction_size: 32,
@@ -1610,7 +1609,7 @@ mod test {
                     source: imm_0,
                 }],
                 max_cycle: CycleCount::Value(0),
-                memory_access: false
+                memory_access: false,
             },
         ];
 

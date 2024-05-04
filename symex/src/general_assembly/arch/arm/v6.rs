@@ -3,6 +3,12 @@
 pub mod decoder;
 pub mod timing;
 
+use std::fmt::Display;
+
+use armv6_m_instruction_parser::Error;
+use regex::Regex;
+use tracing::trace;
+
 use crate::{
     elf_util::{ExpressionType, Variable},
     general_assembly::{
@@ -13,9 +19,6 @@ use crate::{
         RunConfig,
     },
 };
-use armv6_m_instruction_parser::Error;
-use regex::Regex;
-use tracing::trace;
 
 /// Type level denotation for the
 /// [Armv6-M](https://developer.arm.com/documentation/ddi0419/latest/) ISA.
@@ -57,7 +60,13 @@ impl Arch for ArmV6M {
             Ok(pc.add(&two))
         };
 
-        let write_pc: RegisterWriteHook = |state, value| state.set_register("PC".to_owned(), value);
+        // Last bit of the PC is allways 0.
+        let write_pc: RegisterWriteHook = |state, value| {
+            state.set_register(
+                "PC".to_owned(),
+                value.and(&state.ctx.from_u64((u32::MAX - 1) as u64, 32)),
+            )
+        };
 
         cfg.register_read_hooks.push(("PC+".to_owned(), read_pc));
         cfg.register_write_hooks.push(("PC+".to_owned(), write_pc));
@@ -70,11 +79,17 @@ impl Arch for ArmV6M {
         cfg.memory_read_hooks
             .push((MemoryHookAddress::Single(0x4000c008), read_reset_done));
     }
+
     fn translate(&self, buff: &[u8], _state: &GAState) -> Result<Instruction, ArchError> {
         let ret = armv6_m_instruction_parser::parse(buff).map_err(map_err)?;
-        // println!("Instr : {ret:?}");
         let to_exec = Self::expand(ret);
         Ok(to_exec)
+    }
+}
+
+impl Display for ArmV6M {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f,"ARMv6-M")
     }
 }
 
