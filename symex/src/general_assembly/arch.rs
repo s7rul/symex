@@ -68,6 +68,10 @@ pub enum ParseError {
     /// Invalid condition code used.
     #[error("Parser encounterd an invalid conditon.")]
     InvalidCondition,
+
+    /// A generic parsing error.
+    #[error("Parser encounterd some unspecified error.")]
+    Generic(&'static str),
 }
 
 /// A generic architecture
@@ -86,7 +90,7 @@ pub trait Arch: Debug + Display {
 ///
 /// This trait denotes that the implementer can discern between the different
 /// variants of architectures in the family using only the [`File`].
-pub trait Family: Debug  {
+pub trait Family: Debug {
     /// Tries to convert a given binary to an architecture in the family.
     fn try_from(file: &File) -> Result<Box<dyn Arch>, ArchError>;
 }

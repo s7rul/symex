@@ -208,9 +208,7 @@ impl<'vm> GAExecutor<'vm> {
                 let address =
                     self.get_operand_value(&Operand::Local(local_name.to_owned()), local)?;
                 let address = self.resolve_address(address, local)?;
-                let ret = self.get_memory(address, *width);
-
-                ret
+                self.get_memory(address, *width)
             }
             Operand::Flag(f) => {
                 let value = self.state.get_flag(f.clone());

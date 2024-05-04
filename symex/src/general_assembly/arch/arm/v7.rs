@@ -1,6 +1,5 @@
 use std::fmt::Display;
 
-use armv6_m_instruction_parser::instructons::Operation as V6Operation;
 use decoder::Convert;
 use disarmv7::prelude::{Operation as V7Operation, *};
 use general_assembly::operation::Operation;
@@ -24,17 +23,9 @@ pub mod compare;
 pub mod test;
 pub mod timing;
 
-use self::compare::LocalInto;
-
 /// Type level denotation for the Armv7-EM ISA.
-#[derive(Debug)]
+#[derive(Debug, Default)]
 pub struct ArmV7EM {}
-
-impl Default for ArmV7EM {
-    fn default() -> Self {
-        Self {}
-    }
-}
 
 impl Arch for ArmV7EM {
     fn add_hooks(&self, cfg: &mut RunConfig) {
@@ -133,210 +124,32 @@ impl Display for ArmV7EM {
 impl From<disarmv7::ParseError> for ParseError {
     fn from(value: disarmv7::ParseError) -> Self {
         match value {
-            _ => todo!(),
-        }
-    }
-}
-
-impl LocalInto<V7Operation> for V6Operation {
-    #[allow(unused_variables)]
-    fn into(self) -> V7Operation {
-        match self {
-            V6Operation::ADCReg { m, n, d } => operation::AdcRegister::builder()
-                .set_rm(m.local_into())
-                .set_s(Some(SetFlags::InITBlock(false)))
-                .set_rn(n.local_into())
-                .set_rd(Some(d.local_into()))
-                .set_shift(None)
-                .complete()
-                .into(),
-            V6Operation::ADDImm { imm, n, d } => operation::AddImmediate::builder()
-                .set_s(Some(SetFlags::InITBlock(false)))
-                .set_rd(d.into_option())
-                .set_rn(n.local_into())
-                .set_imm(imm)
-                .complete()
-                .into(),
-            V6Operation::ADDReg { m, n, d } => operation::AddRegister::builder()
-                .set_rm(m.local_into())
-                .set_rd(d.into_option())
-                .set_rn(n.local_into())
-                .set_s(Some(SetFlags::InITBlock(false)))
-                .set_shift(None)
-                .complete()
-                .into(),
-            V6Operation::ADDImmSP { d, imm } => operation::AddSPImmediate::builder()
-                .set_rd(d.into_option())
-                .set_s(Some(false))
-                .set_imm(imm)
-                .complete()
-                .into(),
-            V6Operation::ADDRegSP { d, m } => operation::AddSPRegister::builder()
-                .set_s(Some(false))
-                .set_rd(d.into_option())
-                .set_rm(m.local_into())
-                .set_shift(None)
-                .complete()
-                .into(),
-            V6Operation::ADR { d, imm } => operation::Adr::builder()
-                .set_rd(d.local_into())
-                .set_add(true)
-                .set_imm(imm)
-                .complete()
-                .into(),
-            V6Operation::ANDReg { m, dn } => operation::AndRegister::builder()
-                .set_s(Some(SetFlags::InITBlock(false)))
-                .set_rd(dn.clone().into_option())
-                .set_rn(dn.local_into())
-                .set_rm(m.local_into())
-                .set_shift(None)
-                .complete()
-                .into(),
-            V6Operation::ASRImm { imm, m, d } => operation::AsrImmediate::builder()
-                .set_s(Some(SetFlags::InITBlock(false)))
-                .set_rd(d.local_into())
-                .set_rm(m.local_into())
-                .set_imm(imm)
-                .complete()
-                .into(),
-            V6Operation::ASRReg { m, dn } => operation::AsrRegister::builder()
-                .set_rm(m.local_into())
-                .set_s(Some(SetFlags::InITBlock(false)))
-                .set_rd(dn.clone().local_into())
-                .set_rn(dn.local_into())
-                .complete()
-                .into(),
-            V6Operation::B { cond, imm } => operation::B::builder()
-                .set_condition(cond.local_into())
-                .set_imm(imm)
-                .complete()
-                .into(),
-            V6Operation::BICReg { m, dn } => operation::BicRegister::builder()
-                .set_s(Some(SetFlags::InITBlock(false)))
-                .set_rd(dn.clone().into_option())
-                .set_rn(dn.local_into())
-                .set_rm(m.local_into())
-                .set_shift(None)
-                .complete()
-                .into(),
-            V6Operation::BKPT { imm } => operation::Bkpt::builder().set_imm(imm).complete().into(),
-            V6Operation::BL { imm } => operation::Bl::builder().set_imm(imm).complete().into(),
-            V6Operation::BLXReg { m } => operation::Blx::builder()
-                .set_rm(m.local_into())
-                .complete()
-                .into(),
-            V6Operation::BX { m } => operation::Bx::builder()
-                .set_rm(m.local_into())
-                .complete()
-                .into(),
-            V6Operation::CMNReg { m, n } => operation::CmnRegister::builder()
-                .set_rn(n.local_into())
-                .set_rm(m.local_into())
-                .set_shift(None)
-                .complete()
-                .into(),
-            V6Operation::CMPImm { n, imm } => operation::CmpImmediate::builder()
-                .set_rn(n.local_into())
-                .set_imm(imm)
-                .complete()
-                .into(),
-            V6Operation::CMPReg { m, n } => operation::CmpRegister::builder()
-                .set_rn(n.local_into())
-                .set_rm(m.local_into())
-                .set_shift(None)
-                .complete()
-                .into(),
-            V6Operation::CPS { im } => todo!(),
-            V6Operation::CPY => todo!(),
-            V6Operation::DMB { option } => todo!(),
-            V6Operation::DSB { option } => todo!(),
-            V6Operation::EORReg { m, dn } => operation::EorRegister::builder()
-                .set_s(Some(SetFlags::InITBlock(false)))
-                .set_rd(dn.clone().into_option())
-                .set_rn(dn.local_into())
-                .set_rm(m.local_into())
-                .set_shift(None)
-                .complete()
-                .into(),
-            V6Operation::ISB { option } => todo!(),
-            V6Operation::LDM { n, reg_list } => operation::Ldm::builder()
-                .set_w(None)
-                .set_rn(n.local_into())
-                .set_registers(RegisterList {
-                    registers: reg_list.iter().map(|el| el.local_into()).collect(),
-                })
-                .complete()
-                .into(),
-            V6Operation::LDRImm { imm, n, t } => operation::LdrImmediate::builder()
-                .set_w(None)
-                .set_add(true)
-                .set_index(true)
-                .set_rt(t.local_into())
-                .set_rn(n.local_into())
-                .set_imm(imm)
-                .complete()
-                .into(),
-            V6Operation::LDRLiteral { t, imm } => operation::LdrLiteral::builder()
-                .set_rt(t.local_into())
-                .set_add(true)
-                .set_imm(imm)
-                .complete()
-                .into(),
-            V6Operation::LDRReg { m, n, t } => operation::LdrRegister::builder()
-                .set_w(None)
-                .set_rt(t.local_into())
-                .set_rn(n.local_into())
-                .set_rm(m.local_into())
-                .set_shift(None)
-                .complete()
-                .into(),
-            V6Operation::LDRBImm { imm, n, t } => todo!(),
-            V6Operation::LDRBReg { m, n, t } => todo!(),
-            V6Operation::LDRHImm { imm, n, t } => todo!(),
-            V6Operation::LDRHReg { m, n, t } => todo!(),
-            V6Operation::LDRSBReg { m, n, t } => todo!(),
-            V6Operation::LDRSH { m, n, t } => todo!(),
-            V6Operation::LSLImm { imm, m, d } => todo!(),
-            V6Operation::LSLReg { m, dn } => todo!(),
-            V6Operation::LSRImm { imm, m, d } => todo!(),
-            V6Operation::LSRReg { m, dn } => todo!(),
-            V6Operation::MOVImm { d, imm } => todo!(),
-            V6Operation::MOVReg { m, d, set_flags } => todo!(),
-            V6Operation::MRS { d, sysm } => todo!(),
-            V6Operation::MSRReg { n, sysm } => todo!(),
-            V6Operation::MUL { n, dm } => todo!(),
-            V6Operation::MVNReg { m, d } => todo!(),
-            V6Operation::NOP => todo!(),
-            V6Operation::ORRReg { m, dn } => todo!(),
-            V6Operation::POP { reg_list } => todo!(),
-            V6Operation::PUSH { reg_list } => todo!(),
-            V6Operation::REV { m, d } => todo!(),
-            V6Operation::REV16 { m, d } => todo!(),
-            V6Operation::REVSH { m, d } => todo!(),
-            V6Operation::RORReg { m, dn } => todo!(),
-            V6Operation::RSBImm { n, d } => todo!(),
-            V6Operation::SBCReg { m, dn } => todo!(),
-            V6Operation::SEV => todo!(),
-            V6Operation::STM { n, reg_list } => todo!(),
-            V6Operation::STRImm { imm, n, t } => todo!(),
-            V6Operation::STRReg { m, n, t } => todo!(),
-            V6Operation::STRBImm { imm, n, t } => todo!(),
-            V6Operation::STRBReg { m, n, t } => todo!(),
-            V6Operation::STRHImm { imm, n, t } => todo!(),
-            V6Operation::STRHReg { m, n, t } => todo!(),
-            V6Operation::SUBImm { imm, n, d } => todo!(),
-            V6Operation::SUBReg { m, n, d } => todo!(),
-            V6Operation::SUBImmSP { imm } => todo!(),
-            V6Operation::SVC { imm } => todo!(),
-            V6Operation::SXTB { m, d } => todo!(),
-            V6Operation::SXTH { m, d } => todo!(),
-            V6Operation::TSTReg { m, n } => todo!(),
-            V6Operation::UDF { imm } => todo!(),
-            V6Operation::UXTB { m, d } => todo!(),
-            V6Operation::UXTH { m, d } => todo!(),
-            V6Operation::WFE => todo!(),
-            V6Operation::WFI => todo!(),
-            V6Operation::YIELD => todo!(),
+            disarmv7::ParseError::Undefined => ParseError::InvalidInstruction,
+            disarmv7::ParseError::ArchError(aerr) => match aerr {
+                disarmv7::prelude::arch::ArchError::InvalidCondition => {
+                    ParseError::InvalidCondition
+                }
+                disarmv7::prelude::arch::ArchError::InvalidRegister(_) => {
+                    ParseError::InvalidRegister
+                }
+                disarmv7::prelude::arch::ArchError::InvalidField(_) => {
+                    ParseError::MalfromedInstruction
+                }
+            },
+            disarmv7::ParseError::Unpredictable => ParseError::Unpredictable,
+            disarmv7::ParseError::Invalid16Bit(_) | disarmv7::ParseError::Invalid32Bit(_) => {
+                ParseError::InvalidInstruction
+            }
+            disarmv7::ParseError::InvalidField(_) => ParseError::MalfromedInstruction,
+            disarmv7::ParseError::Incomplete32Bit => ParseError::InsufficientInput,
+            disarmv7::ParseError::InternalError(info) => ParseError::Generic(info),
+            disarmv7::ParseError::IncompleteParser => {
+                ParseError::Generic("Encountered instruction that is not yet supported.")
+            }
+            disarmv7::ParseError::InvalidCondition => ParseError::InvalidCondition,
+            disarmv7::ParseError::IncompleteProgram => ParseError::InsufficientInput,
+            disarmv7::ParseError::InvalidRegister(_) => ParseError::InvalidRegister,
+            disarmv7::ParseError::PartiallyParsed(error, _) => (*error).into(),
         }
     }
 }
