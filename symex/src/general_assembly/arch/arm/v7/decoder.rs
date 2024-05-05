@@ -103,6 +103,7 @@ macro_rules! local {
 pub trait Convert {
     fn convert(self,in_it_block:bool) -> Vec<Operation>;
 }
+
 impl Convert for (usize, V7Operation) {
     fn convert(self,in_it_block:bool) -> Vec<Operation> {
         'outer_block: {
@@ -3425,6 +3426,7 @@ mod sealed {
 use sealed::Into;
 
 use self::sealed::ToString;
+
 
 impl sealed::Into<Operand> for Register {
     fn local_into(self) -> Operand {
