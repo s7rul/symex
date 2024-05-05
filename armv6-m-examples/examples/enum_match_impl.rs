@@ -137,6 +137,7 @@ impl Valid for TestEnum2 {
 #[no_mangle]
 fn test_any() -> u16 {
     let input: TestEnum = any();
+    // let input = TestEnum::Four(Inner::Two(u16::MAX,u16::MAX));
     let r = handle_test_enum(input);
     r
 }
@@ -173,7 +174,7 @@ fn handle_test_enum(n: TestEnum) -> u16 {
         TestEnum::Two => simple_if(2),
         TestEnum::Three(v) => v,
         TestEnum::Four(i) => {match i {
-            Inner::One => 1,
+            Inner::One => 4,
             Inner::Two(a, b) => a + b,
         }},
         TestEnum::Five(v) => simple_if(v),
