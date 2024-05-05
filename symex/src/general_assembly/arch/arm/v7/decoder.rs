@@ -412,7 +412,7 @@ impl Convert for (usize, V7Operation) {
                         Operation::And { 
                             destination: rd.clone(), 
                             operand1: rd,
-                            operand2: Operand::Immidiate(DataWord::Word32(mask)) 
+                            operand2: Operand::Immediate(DataWord::Word32(mask)) 
                         }
                     ]
                 }
@@ -655,12 +655,10 @@ impl Convert for (usize, V7Operation) {
                 // TODO! Decide wether or not to use this 
                 V7Operation::Dbg(_) => vec![],
                 V7Operation::Dmb(_) => {
-                    // todo!("This requires an exhaustive rewrite of the system to allow memory barriers")
-                    vec![]
+                    todo!("This requires an exhaustive rewrite of the system to allow memory barriers")
                 }
                 V7Operation::Dsb(_) => {
-                    // todo!("This requires an exhaustive rewrite of the system to allow memory barriers")
-                    vec![]
+                    todo!("This requires an exhaustive rewrite of the system to allow memory barriers")
                 }
                 V7Operation::EorImmediate(eor) => {
                     consume!(
@@ -3533,7 +3531,7 @@ impl sealed::Into<GAShift> for Shift {
 
 impl Into<Operand> for u32 {
     fn local_into(self) -> Operand {
-        Operand::Immidiate(DataWord::Word32(self))
+        Operand::Immediate(DataWord::Word32(self))
     }
 }
 fn mask_dyn(start: u32, end: u32) -> u32 {

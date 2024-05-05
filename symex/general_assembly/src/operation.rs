@@ -104,7 +104,7 @@ pub enum Operation {
 
     /// Bitwise or.
     ///
-    /// ```rust
+    /// ```ignore
     /// destination = operand1 | operand2
     /// ```
     #[allow(missing_docs)]

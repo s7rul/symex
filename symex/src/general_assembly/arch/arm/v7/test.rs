@@ -121,7 +121,7 @@ macro_rules! initiate {
     }) => {
         $(
             let operand = initiate!($exec $(register $reg)? $(address $address $width)? $(flag $flag)?);
-            let intermediate = Operand::Immidiate(general_assembly::operand::DataWord::Word32($eq_value as u32));
+            let intermediate = Operand::Immediate(general_assembly::operand::DataWord::Word32($eq_value as u32));
             let operation = general_assembly::operation::Operation::Move { destination: operand, source: intermediate};
             $exec.execute_operation(&operation,&mut HashMap::new()).expect("Malformed test");
         )*
@@ -1802,7 +1802,7 @@ fn test_b() {
 }
 
 #[test]
-fn test_b_coditional() {
+fn test_b_conditional() {
     let mut vm = setup_test_vm();
     let project = vm.project;
 
@@ -2305,7 +2305,7 @@ fn test_bl() {
         GAOperation::Add {
             destination: Operand::Local("newPC".to_owned()),
             operand1: Operand::Local("PC".to_owned()),
-            operand2: Operand::Immidiate(DataWord::Word32(0x4)),
+            operand2: Operand::Immediate(DataWord::Word32(0x4)),
         },
         GAOperation::Move {
             destination: Operand::Register("PC".to_owned()),

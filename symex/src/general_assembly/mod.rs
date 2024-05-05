@@ -19,7 +19,7 @@ pub enum GAError {
     #[error("Project error: {0}")]
     ProjectError(#[from] ProjectError),
 
-    #[error("Memmory error: {0}")]
+    #[error("memory error: {0}")]
     MemoryError(#[from] MemoryError),
 
     #[error("Entry function {0} not found.")]

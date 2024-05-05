@@ -48,7 +48,7 @@ impl ArmV6M {
             }
             Operation::ADDImm { imm, n, d } => {
                 let dest = arm_register_to_ga_operand(d);
-                let imm = Operand::Immidiate(DataWord::Word32(*imm));
+                let imm = Operand::Immediate(DataWord::Word32(*imm));
                 let nreg = arm_register_to_ga_operand(n);
                 let op_local = Operand::Local("op".to_owned());
 
@@ -118,7 +118,7 @@ impl ArmV6M {
             Operation::ADDImmSP { d, imm } => vec![GAOperation::Add {
                 destination: arm_register_to_ga_operand(d),
                 operand1: arm_register_to_ga_operand(&Register::SP),
-                operand2: Operand::Immidiate(DataWord::Word32(*imm)),
+                operand2: Operand::Immediate(DataWord::Word32(*imm)),
             }],
             Operation::ADDRegSP { d, m } => vec![GAOperation::Add {
                 destination: arm_register_to_ga_operand(d),
@@ -126,22 +126,21 @@ impl ArmV6M {
                 operand2: arm_register_to_ga_operand(m),
             }],
             Operation::ADR { d, imm } => {
-                let imm = imm;
                 vec![
                     GAOperation::Add {
                         destination: Operand::Local("addr".to_owned()),
                         operand1: Operand::Register("PC".to_owned()),
-                        operand2: Operand::Immidiate(DataWord::Word32(2)),
+                        operand2: Operand::Immediate(DataWord::Word32(2)),
                     },
                     GAOperation::And {
                         destination: Operand::Local("addr".to_owned()),
                         operand1: Operand::Local("addr".to_owned()),
-                        operand2: Operand::Immidiate(DataWord::Word32(!0b11)),
+                        operand2: Operand::Immediate(DataWord::Word32(!0b11)),
                     },
                     GAOperation::Add {
                         destination: arm_register_to_ga_operand(d),
                         operand1: Operand::Local("addr".to_owned()),
-                        operand2: Operand::Immidiate(DataWord::Word32(*imm)),
+                        operand2: Operand::Immediate(DataWord::Word32(*imm)),
                     },
                 ]
             }
@@ -162,13 +161,13 @@ impl ArmV6M {
                 GAOperation::Sra {
                     destination: arm_register_to_ga_operand(d),
                     operand: arm_register_to_ga_operand(m),
-                    shift: Operand::Immidiate(DataWord::Word32(*imm)),
+                    shift: Operand::Immediate(DataWord::Word32(*imm)),
                 },
                 GAOperation::SetNFlag(arm_register_to_ga_operand(d)),
                 GAOperation::SetZFlag(arm_register_to_ga_operand(d)),
                 GAOperation::SetCFlagSra {
                     operand: Operand::Local("m".to_owned()),
-                    shift: Operand::Immidiate(DataWord::Word32(*imm)),
+                    shift: Operand::Immediate(DataWord::Word32(*imm)),
                 },
             ],
             Operation::ASRReg { m, dn } => {
@@ -185,7 +184,7 @@ impl ArmV6M {
                     GAOperation::And {
                         destination: shift_local.clone(),
                         operand1: mreg,
-                        operand2: Operand::Immidiate(DataWord::Word32(0xff)),
+                        operand2: Operand::Immediate(DataWord::Word32(0xff)),
                     },
                     GAOperation::Sra {
                         destination: dnreg.clone(),
@@ -207,7 +206,7 @@ impl ArmV6M {
                     GAOperation::Add {
                         destination: Operand::Local("new_pc".to_owned()),
                         operand1: Operand::Register("PC".to_owned()),
-                        operand2: Operand::Immidiate(DataWord::Word32(imm)),
+                        operand2: Operand::Immediate(DataWord::Word32(imm)),
                     },
                     GAOperation::ConditionalJump {
                         destination: Operand::Local("new_pc".to_owned()),
@@ -244,7 +243,7 @@ impl ArmV6M {
                 GAOperation::Add {
                     destination: Operand::Local("newPC".to_owned()),
                     operand1: Operand::Local("PC".to_owned()),
-                    operand2: Operand::Immidiate(DataWord::Word32(*imm)),
+                    operand2: Operand::Immediate(DataWord::Word32(*imm)),
                 },
                 GAOperation::Move {
                     destination: Operand::Register("PC".to_owned()),
@@ -296,7 +295,7 @@ impl ArmV6M {
             }
             Operation::CMPImm { n, imm } => {
                 let op_n = arm_register_to_ga_operand(n);
-                let op_imm = Operand::Immidiate(DataWord::Word32(*imm));
+                let op_imm = Operand::Immediate(DataWord::Word32(*imm));
                 vec![
                     GAOperation::Sub {
                         destination: Operand::Local("result".to_owned()),
@@ -392,7 +391,7 @@ impl ArmV6M {
                     operations.push(GAOperation::Add {
                         destination: Operand::Local("Address".to_owned()),
                         operand1: Operand::Local("Address".to_owned()),
-                        operand2: Operand::Immidiate(DataWord::Word32(4)),
+                        operand2: Operand::Immediate(DataWord::Word32(4)),
                     })
                 }
                 if reg_list.contains(n) {
@@ -408,7 +407,7 @@ impl ArmV6M {
                 GAOperation::Add {
                     destination: Operand::Local("addr".to_owned()),
                     operand1: arm_register_to_ga_operand(n),
-                    operand2: Operand::Immidiate(DataWord::Word32(*imm)),
+                    operand2: Operand::Immediate(DataWord::Word32(*imm)),
                 },
                 GAOperation::Move {
                     destination: Operand::Register("LastAddr".to_owned()),
@@ -423,17 +422,17 @@ impl ArmV6M {
                 GAOperation::Add {
                     destination: Operand::Local("addr".to_owned()),
                     operand1: Operand::Register("PC".to_owned()),
-                    operand2: Operand::Immidiate(DataWord::Word32(2)),
+                    operand2: Operand::Immediate(DataWord::Word32(2)),
                 },
                 GAOperation::And {
                     destination: Operand::Local("addr".to_owned()),
                     operand1: Operand::Local("addr".to_owned()),
-                    operand2: Operand::Immidiate(DataWord::Word32(!0b11)),
+                    operand2: Operand::Immediate(DataWord::Word32(!0b11)),
                 },
                 GAOperation::Add {
                     destination: Operand::Local("addr".to_owned()),
                     operand1: Operand::Local("addr".to_owned()),
-                    operand2: Operand::Immidiate(DataWord::Word32(*imm)),
+                    operand2: Operand::Immediate(DataWord::Word32(*imm)),
                 },
                 GAOperation::Move {
                     destination: Operand::Register("LastAddr".to_owned()),
@@ -463,7 +462,7 @@ impl ArmV6M {
                 GAOperation::Add {
                     destination: Operand::Local("addr".to_owned()),
                     operand1: arm_register_to_ga_operand(n),
-                    operand2: Operand::Immidiate(DataWord::Word32(*imm)),
+                    operand2: Operand::Immediate(DataWord::Word32(*imm)),
                 },
                 GAOperation::Move {
                     destination: Operand::Register("LastAddr".to_owned()),
@@ -503,7 +502,7 @@ impl ArmV6M {
                 GAOperation::Add {
                     destination: Operand::Local("addr".to_owned()),
                     operand1: arm_register_to_ga_operand(n),
-                    operand2: Operand::Immidiate(DataWord::Word32(*imm)),
+                    operand2: Operand::Immediate(DataWord::Word32(*imm)),
                 },
                 GAOperation::Move {
                     destination: Operand::Register("LastAddr".to_owned()),
@@ -583,7 +582,7 @@ impl ArmV6M {
                 GAOperation::Sl {
                     destination: arm_register_to_ga_operand(d),
                     operand: arm_register_to_ga_operand(m),
-                    shift: Operand::Immidiate(DataWord::Word32(*imm)),
+                    shift: Operand::Immediate(DataWord::Word32(*imm)),
                 },
                 GAOperation::SetNFlag(arm_register_to_ga_operand(d)),
                 GAOperation::SetZFlag(arm_register_to_ga_operand(d)),
@@ -592,7 +591,7 @@ impl ArmV6M {
                 GAOperation::And {
                     destination: Operand::Local("shift".to_owned()),
                     operand1: arm_register_to_ga_operand(m),
-                    operand2: Operand::Immidiate(DataWord::Word32(0xff)),
+                    operand2: Operand::Immediate(DataWord::Word32(0xff)),
                 },
                 GAOperation::Sl {
                     destination: arm_register_to_ga_operand(dn),
@@ -606,7 +605,7 @@ impl ArmV6M {
                 GAOperation::Srl {
                     destination: arm_register_to_ga_operand(d),
                     operand: arm_register_to_ga_operand(m),
-                    shift: Operand::Immidiate(DataWord::Word32(*imm)),
+                    shift: Operand::Immediate(DataWord::Word32(*imm)),
                 },
                 GAOperation::SetNFlag(arm_register_to_ga_operand(d)),
                 GAOperation::SetZFlag(arm_register_to_ga_operand(d)),
@@ -615,7 +614,7 @@ impl ArmV6M {
                 GAOperation::And {
                     destination: Operand::Local("shift".to_owned()),
                     operand1: arm_register_to_ga_operand(m),
-                    operand2: Operand::Immidiate(DataWord::Word32(0xff)),
+                    operand2: Operand::Immediate(DataWord::Word32(0xff)),
                 },
                 GAOperation::Srl {
                     destination: arm_register_to_ga_operand(dn),
@@ -627,7 +626,7 @@ impl ArmV6M {
             ],
             Operation::MOVImm { d, imm } => {
                 let destination = arm_register_to_ga_operand(d);
-                let source = Operand::Immidiate(DataWord::Word32(*imm));
+                let source = Operand::Immediate(DataWord::Word32(*imm));
 
                 vec![
                     GAOperation::Move {
@@ -719,14 +718,14 @@ impl ArmV6M {
                     operations.push(GAOperation::Add {
                         destination: Operand::Local("Address".to_owned()),
                         operand1: Operand::Local("Address".to_owned()),
-                        operand2: Operand::Immidiate(DataWord::Word32(4)),
+                        operand2: Operand::Immediate(DataWord::Word32(4)),
                     })
                 }
                 // update SP
                 operations.push(GAOperation::Add {
                     destination: Operand::Register("SP".to_owned()),
                     operand1: Operand::Register("SP".to_owned()),
-                    operand2: Operand::Immidiate(DataWord::Word32((4 * reg_list.len()) as u32)),
+                    operand2: Operand::Immediate(DataWord::Word32((4 * reg_list.len()) as u32)),
                 });
 
                 operations
@@ -737,7 +736,7 @@ impl ArmV6M {
                 operations.push(GAOperation::Sub {
                     destination: Operand::Local("Address".to_owned()),
                     operand1: Operand::Register("SP".to_owned()),
-                    operand2: Operand::Immidiate(DataWord::Word32((4 * reg_list.len()) as u32)),
+                    operand2: Operand::Immediate(DataWord::Word32((4 * reg_list.len()) as u32)),
                 });
                 for reg in reg_list {
                     // write register to memory
@@ -749,14 +748,14 @@ impl ArmV6M {
                     operations.push(GAOperation::Add {
                         destination: Operand::Local("Address".to_owned()),
                         operand1: Operand::Local("Address".to_owned()),
-                        operand2: Operand::Immidiate(DataWord::Word32(4)),
+                        operand2: Operand::Immediate(DataWord::Word32(4)),
                     })
                 }
                 // update SP
                 operations.push(GAOperation::Sub {
                     destination: Operand::Register("SP".to_owned()),
                     operand1: Operand::Register("SP".to_owned()),
-                    operand2: Operand::Immidiate(DataWord::Word32((4 * reg_list.len()) as u32)),
+                    operand2: Operand::Immediate(DataWord::Word32((4 * reg_list.len()) as u32)),
                 });
 
                 operations
@@ -769,16 +768,16 @@ impl ArmV6M {
                 let b3 = Operand::Local("B3".to_owned());
                 let b4 = Operand::Local("B4".to_owned());
 
-                let b1_mask = Operand::Immidiate(DataWord::Word32(0x000000ff));
-                let b2_mask = Operand::Immidiate(DataWord::Word32(0x0000ff00));
-                let b3_mask = Operand::Immidiate(DataWord::Word32(0x00ff0000));
-                let b4_mask = Operand::Immidiate(DataWord::Word32(0xff000000));
+                let b1_mask = Operand::Immediate(DataWord::Word32(0x000000ff));
+                let b2_mask = Operand::Immediate(DataWord::Word32(0x0000ff00));
+                let b3_mask = Operand::Immediate(DataWord::Word32(0x00ff0000));
+                let b4_mask = Operand::Immediate(DataWord::Word32(0xff000000));
 
                 vec![
                     // set destination to 0
                     GAOperation::Move {
                         destination: d.clone(),
-                        source: Operand::Immidiate(DataWord::Word32(0)),
+                        source: Operand::Immediate(DataWord::Word32(0)),
                     },
                     // extract all bytes
                     GAOperation::And {
@@ -805,22 +804,22 @@ impl ArmV6M {
                     GAOperation::Sl {
                         destination: b1.clone(),
                         operand: b1.clone(),
-                        shift: Operand::Immidiate(DataWord::Word32(24)),
+                        shift: Operand::Immediate(DataWord::Word32(24)),
                     },
                     GAOperation::Sl {
                         destination: b2.clone(),
                         operand: b2.clone(),
-                        shift: Operand::Immidiate(DataWord::Word32(8)),
+                        shift: Operand::Immediate(DataWord::Word32(8)),
                     },
                     GAOperation::Srl {
                         destination: b3.clone(),
                         operand: b3.clone(),
-                        shift: Operand::Immidiate(DataWord::Word32(8)),
+                        shift: Operand::Immediate(DataWord::Word32(8)),
                     },
                     GAOperation::Srl {
                         destination: b4.clone(),
                         operand: b4.clone(),
-                        shift: Operand::Immidiate(DataWord::Word32(24)),
+                        shift: Operand::Immediate(DataWord::Word32(24)),
                     },
                     // or in to destination
                     GAOperation::Or {
@@ -853,16 +852,16 @@ impl ArmV6M {
                 let b3 = Operand::Local("B3".to_owned());
                 let b4 = Operand::Local("B4".to_owned());
 
-                let b1_mask = Operand::Immidiate(DataWord::Word32(0x000000ff));
-                let b2_mask = Operand::Immidiate(DataWord::Word32(0x0000ff00));
-                let b3_mask = Operand::Immidiate(DataWord::Word32(0x00ff0000));
-                let b4_mask = Operand::Immidiate(DataWord::Word32(0xff000000));
+                let b1_mask = Operand::Immediate(DataWord::Word32(0x000000ff));
+                let b2_mask = Operand::Immediate(DataWord::Word32(0x0000ff00));
+                let b3_mask = Operand::Immediate(DataWord::Word32(0x00ff0000));
+                let b4_mask = Operand::Immediate(DataWord::Word32(0xff000000));
 
                 vec![
                     // set destination to 0
                     GAOperation::Move {
                         destination: d.clone(),
-                        source: Operand::Immidiate(DataWord::Word32(0)),
+                        source: Operand::Immediate(DataWord::Word32(0)),
                     },
                     // extract all bytes
                     GAOperation::And {
@@ -889,22 +888,22 @@ impl ArmV6M {
                     GAOperation::Sl {
                         destination: b1.clone(),
                         operand: b1.clone(),
-                        shift: Operand::Immidiate(DataWord::Word32(8)),
+                        shift: Operand::Immediate(DataWord::Word32(8)),
                     },
                     GAOperation::Srl {
                         destination: b2.clone(),
                         operand: b2.clone(),
-                        shift: Operand::Immidiate(DataWord::Word32(8)),
+                        shift: Operand::Immediate(DataWord::Word32(8)),
                     },
                     GAOperation::Sl {
                         destination: b3.clone(),
                         operand: b3.clone(),
-                        shift: Operand::Immidiate(DataWord::Word32(8)),
+                        shift: Operand::Immediate(DataWord::Word32(8)),
                     },
                     GAOperation::Srl {
                         destination: b4.clone(),
                         operand: b4.clone(),
-                        shift: Operand::Immidiate(DataWord::Word32(8)),
+                        shift: Operand::Immediate(DataWord::Word32(8)),
                     },
                     // or in to destination
                     GAOperation::Or {
@@ -935,14 +934,14 @@ impl ArmV6M {
                 let b1 = Operand::Local("b1".to_owned());
                 let b2 = Operand::Local("B2".to_owned());
 
-                let b1_mask = Operand::Immidiate(DataWord::Word32(0x000000ff));
-                let b2_mask = Operand::Immidiate(DataWord::Word32(0x0000ff00));
+                let b1_mask = Operand::Immediate(DataWord::Word32(0x000000ff));
+                let b2_mask = Operand::Immediate(DataWord::Word32(0x0000ff00));
 
                 vec![
                     // set destination to 0
                     GAOperation::Move {
                         destination: d.clone(),
-                        source: Operand::Immidiate(DataWord::Word32(0)),
+                        source: Operand::Immediate(DataWord::Word32(0)),
                     },
                     // extract all bytes
                     GAOperation::And {
@@ -959,12 +958,12 @@ impl ArmV6M {
                     GAOperation::Sl {
                         destination: b1.clone(),
                         operand: b1.clone(),
-                        shift: Operand::Immidiate(DataWord::Word32(8)),
+                        shift: Operand::Immediate(DataWord::Word32(8)),
                     },
                     GAOperation::Srl {
                         destination: b2.clone(),
                         operand: b2.clone(),
-                        shift: Operand::Immidiate(DataWord::Word32(8)),
+                        shift: Operand::Immediate(DataWord::Word32(8)),
                     },
                     // or in to destination
                     GAOperation::Or {
@@ -989,7 +988,7 @@ impl ArmV6M {
                 let m = arm_register_to_ga_operand(m);
                 let dn = arm_register_to_ga_operand(dn);
                 let shift = Operand::Local("shift".to_owned());
-                let mask = Operand::Immidiate(DataWord::Word32(0xff));
+                let mask = Operand::Immediate(DataWord::Word32(0xff));
                 vec![
                     GAOperation::And {
                         destination: shift.clone(),
@@ -1010,7 +1009,7 @@ impl ArmV6M {
                 let n = arm_register_to_ga_operand(n);
                 let d = arm_register_to_ga_operand(d);
                 let local_n = Operand::Local("n".to_owned());
-                let zero = Operand::Immidiate(DataWord::Word32(0));
+                let zero = Operand::Immediate(DataWord::Word32(0));
 
                 vec![
                     GAOperation::Move {
@@ -1083,7 +1082,7 @@ impl ArmV6M {
                 let n = arm_register_to_ga_operand(n);
                 let addr = Operand::Local("addr".to_owned());
                 let to_addr = Operand::AddressInLocal("addr".to_owned(), 32);
-                let four = Operand::Immidiate(DataWord::Word32(4));
+                let four = Operand::Immediate(DataWord::Word32(4));
                 let mut operations = vec![GAOperation::Move {
                     destination: addr.clone(),
                     source: n.clone(),
@@ -1110,7 +1109,7 @@ impl ArmV6M {
                 operations
             }
             Operation::STRImm { imm, n, t } => {
-                let imm = Operand::Immidiate(DataWord::Word32(*imm));
+                let imm = Operand::Immediate(DataWord::Word32(*imm));
                 let n = arm_register_to_ga_operand(n);
                 let t = arm_register_to_ga_operand(t);
                 let addr = Operand::Local("addr".to_owned());
@@ -1156,7 +1155,7 @@ impl ArmV6M {
                 ]
             }
             Operation::STRBImm { imm, n, t } => {
-                let imm = Operand::Immidiate(DataWord::Word32(*imm));
+                let imm = Operand::Immediate(DataWord::Word32(*imm));
                 let n = arm_register_to_ga_operand(n);
                 let t = arm_register_to_ga_operand(t);
                 let addr = Operand::Local("addr".to_owned());
@@ -1202,7 +1201,7 @@ impl ArmV6M {
                 ]
             }
             Operation::STRHImm { imm, n, t } => {
-                let imm = Operand::Immidiate(DataWord::Word32(*imm));
+                let imm = Operand::Immediate(DataWord::Word32(*imm));
                 let n = arm_register_to_ga_operand(n);
                 let t = arm_register_to_ga_operand(t);
                 let addr = Operand::Local("addr".to_owned());
@@ -1248,7 +1247,7 @@ impl ArmV6M {
                 ]
             }
             Operation::SUBImm { imm, n, d } => {
-                let imm = Operand::Immidiate(DataWord::Word32(*imm));
+                let imm = Operand::Immediate(DataWord::Word32(*imm));
                 let n = arm_register_to_ga_operand(n);
                 let d = arm_register_to_ga_operand(d);
                 let local_n = Operand::Local("n".to_owned());
@@ -1314,7 +1313,7 @@ impl ArmV6M {
             Operation::SUBImmSP { imm } => vec![GAOperation::Sub {
                 destination: Operand::Register("SP".to_owned()),
                 operand1: Operand::Register("SP".to_owned()),
-                operand2: Operand::Immidiate(DataWord::Word32(*imm)),
+                operand2: Operand::Immediate(DataWord::Word32(*imm)),
             }],
             Operation::SVC { imm: _ } => {
                 // to be used to call a supervisor in a OS

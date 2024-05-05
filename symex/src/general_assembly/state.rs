@@ -392,7 +392,7 @@ impl GAState {
         match address.get_constant() {
             Some(address_const) => {
                 if self.project.address_in_range(address_const) {
-                    // read from static memmory in project
+                    // read from static memory in project
                     let value = match self.project.get_word(address_const)? {
                         DataWord::Word64(data) => self.ctx.from_u64(data, 64),
                         DataWord::Word32(data) => self.ctx.from_u64(data as u64, 32),
@@ -405,7 +405,7 @@ impl GAState {
                 }
             }
 
-            // For non constant addresses always read non_static memmory
+            // For non constant addresses always read non_static memory
             None => self.read_word_from_memory_no_static(address),
         }
     }
@@ -421,7 +421,7 @@ impl GAState {
                 }
             }
 
-            // For non constant addresses always read non_static memmory
+            // For non constant addresses always read non_static memory
             None => self.write_word_from_memory_no_static(address, value),
         }
     }

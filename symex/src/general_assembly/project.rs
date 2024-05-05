@@ -33,8 +33,8 @@ pub enum ProjectError {
     #[error("Unable to parse elf file: {0}")]
     UnableToParseElf(String),
 
-    #[error("Program memmory error")]
-    ProgramMemmoryError(#[from] MemoryError),
+    #[error("Program memory error")]
+    ProgrammemoryError(#[from] MemoryError),
 
     #[error("Unavalable operation")]
     UnabvalableOperation,
@@ -47,7 +47,7 @@ pub enum ProjectError {
 pub enum PCHook {
     Continue,
     EndSuccess,
-    EndFaliure(&'static str),
+    EndFailure(&'static str),
     Intrinsic(fn(state: &mut GAState) -> SuperResult<()>),
     Suppress,
 }
@@ -80,7 +80,7 @@ pub type SingleMemoryReadHooks = HashMap<u64, MemoryReadHook>;
 pub type RangeMemoryReadHooks = Vec<((u64, u64), MemoryReadHook)>;
 
 /// Holds all data read from the ELF file.
-// Add all read only memmory here later to handle global constants.
+// Add all read only memory here later to handle global constants.
 pub struct Project {
     segments: Segments,
     word_size: WordSize,
