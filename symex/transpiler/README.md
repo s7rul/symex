@@ -2,7 +2,7 @@
   Symex General Assembly Transpiler
 </h1>
 
-This repository defines a small DSL used to define [symex](github.com/s7rul/symex) general_assembly instructions more cleanly and shortly rather than writing out struct by hand. This crate only makes sense in the context of Symex as of now.
+This repository defines a small DSL used to define [symex](../../) general_assembly instructions more cleanly and shortly rather than writing out struct by hand. This crate only makes sense in the context of Symex as of now.
 
 ## Usage
 
@@ -192,4 +192,5 @@ for a more detailed look at the language features please read the [language docu
 
 ## License
 
-This repository is licensed under the [MIT](./LICENSE) license and any contributions shall be licensed under the same license unless explicitly stated otherwise.
+This repository is licensed under the same license as the [symex project](../../) and any contributions shall be licensed under the same license unless explicitly stated otherwise.
+
