@@ -1,6 +1,5 @@
 //! Simple runner that starts symbolic execution on LLVM bitcode.
 //!
-//!
 use std::time::Instant;
 
 use regex::Regex;
@@ -9,7 +8,12 @@ use tracing::{debug, info, trace};
 use crate::{
     elf_util::{ErrorReason, PathStatus, VisualPathResult},
     general_assembly::{
-        self, executor::PathResult, project::PCHook, state::GAState, GAError, RunConfig,
+        self,
+        executor::PathResult,
+        project::PCHook,
+        state::GAState,
+        GAError,
+        RunConfig,
     },
     smt::DContext,
 };
@@ -42,17 +46,17 @@ fn add_architecture_independent_hooks(cfg: &mut RunConfig) {
     // add all pc hooks
     cfg.pc_hooks.push((
         Regex::new(r"^panic_cold_explicit$").unwrap(),
-        PCHook::EndFaliure("explicit panic"),
+        PCHook::EndFailure("explicit panic"),
     ));
     cfg.pc_hooks.push((
         Regex::new(r"^panic_bounds_check$").unwrap(),
-        PCHook::EndFaliure("bounds check panic"),
+        PCHook::EndFailure("bounds check panic"),
     ));
     cfg.pc_hooks
         .push((Regex::new(r"^suppress_path$").unwrap(), PCHook::Suppress));
     cfg.pc_hooks.push((
         Regex::new(r"^unreachable_unchecked$").unwrap(),
-        PCHook::EndFaliure("reach a unreachable unchecked call undefined behavior"),
+        PCHook::EndFailure("reach a unreachable unchecked call undefined behavior"),
     ));
     cfg.pc_hooks.push((
         Regex::new(r"^start_cyclecount$").unwrap(),
@@ -63,11 +67,11 @@ fn add_architecture_independent_hooks(cfg: &mut RunConfig) {
         PCHook::Intrinsic(end_cyclecount),
     ));
     cfg.pc_hooks
-        .push((Regex::new(r"^panic$").unwrap(), PCHook::EndFaliure("panic")));
+        .push((Regex::new(r"^panic$").unwrap(), PCHook::EndFailure("panic")));
 }
 
-/// Run symbolic execution on a elf file where `path` is the path to the ELF file and
-/// `function` is the function the execution starts at.
+/// Run symbolic execution on a elf file where `path` is the path to the ELF
+/// file and `function` is the function the execution starts at.
 /// `cfg` can be used to configure how the execution is carried out.
 pub fn run_elf(
     path: &str,
@@ -115,7 +119,7 @@ fn run_elf_paths(
 
         let v_path_result = match path_result {
             general_assembly::executor::PathResult::Success(_v) => PathStatus::Ok(None),
-            general_assembly::executor::PathResult::Faliure(reason) => {
+            general_assembly::executor::PathResult::Failure(reason) => {
                 PathStatus::Failed(ErrorReason {
                     error_message: reason.to_owned(),
                 })

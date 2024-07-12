@@ -5,7 +5,6 @@ use log::debug;
 use std::{fs, path::PathBuf};
 #[cfg(feature = "llvm")]
 use symex::run::{self, RunConfig, SolveFor};
-use tracing_subscriber;
 
 const BINARY_NAME: &str = "symex";
 

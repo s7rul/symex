@@ -53,7 +53,7 @@ debug = 2
 debug-assertions = true
 incremental = false
 opt-level = 0
-overflow-checks = false
+overflow-checks = true
 lto = 'off'
 
 # cargo build/run --release
@@ -62,8 +62,8 @@ lto = 'off'
 debug = 2
 # debug-assertions = true
 # incremental = false
-# opt-level = 0
-# overflow-checks = false
+opt-level = 2
+overflow-checks = true
 # lto = 'off'
 
 # # cargo test
